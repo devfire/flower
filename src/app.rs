@@ -1,5 +1,6 @@
 use crate::model::*;
 use crate::state::*;
+use crate::timer::{TimerBank, TimerKind, PREP_SECS};
 use gloo_timers::callback::Interval;
 use leptos::prelude::*;
 
@@ -28,7 +29,12 @@ pub fn App() -> impl IntoView {
     let tab = RwSignal::new(Side::Pro);
     let focus_mode = RwSignal::new(true);
     let focused = RwSignal::new(None::<(Side, u32, usize)>);
-    let timer_secs = RwSignal::new((GUIDE[0].minutes * 60) as i32);
+    let initial_secs = (GUIDE[0].minutes * 60).cast_signed();
+    let timer_secs = RwSignal::new(initial_secs);
+    // Remainders of the timers not on screen: the speech timer plus each
+    // team's whole-round prep balance (issue #6). Banking the display
+    // into this on every freeze/tick is what lets timers survive switches.
+    let timer_bank = RwSignal::new(TimerBank::new(initial_secs));
     let timer_label = RwSignal::new(GUIDE[0].title.to_string());
     let timer_announcement = RwSignal::new(String::new());
     let running = RwSignal::new(false);
@@ -47,6 +53,7 @@ pub fn App() -> impl IntoView {
         {
             timer_secs.set(((end - now) / 1_000.0).ceil().max(0.0) as i32);
         }
+        timer_bank.update(|b| b.bank_displayed(timer_secs.get_untracked()));
         running.set(false);
         deadline.set_value(None);
         // Dropping the Interval cancels it: no callbacks fire afterwards.
@@ -56,7 +63,11 @@ pub fn App() -> impl IntoView {
         let next = next.min(GUIDE.len() - 1);
         step.set(next);
         stop_timer();
-        timer_secs.set((GUIDE[next].minutes * 60) as i32);
+        let full = (GUIDE[next].minutes * 60) as i32;
+        timer_bank.update(|b| {
+            b.start_speech(full);
+        });
+        timer_secs.set(full);
         timer_label.set(GUIDE[next].title.to_string());
         timer_announcement.set(String::new());
         // Rebuttals answer the opponent's case, so they are written on the
@@ -88,6 +99,7 @@ pub fn App() -> impl IntoView {
                 let remaining_ms = end - now;
                 if remaining_ms <= 0.0 {
                     timer_secs.set(0);
+                    timer_bank.update(|b| b.bank_displayed(0));
                     running.set(false);
                     deadline.set_value(None);
                     interval.set_value(None);
@@ -97,15 +109,55 @@ pub fn App() -> impl IntoView {
                     ));
                     timer_expired_feedback(audio_ctx.get_value().as_ref());
                 } else {
-                    timer_secs.set((remaining_ms / 1_000.0).ceil() as i32);
+                    let secs = (remaining_ms / 1_000.0).ceil() as i32;
+                    timer_secs.set(secs);
+                    timer_bank.update(|b| b.bank_displayed(secs));
                 }
             })));
         }
     };
+    // Entering prep resumes that team's remaining balance — never a
+    // fresh 3:00. `stop_timer` has already banked the outgoing timer.
     let start_prep = move |side: Side| {
         stop_timer();
-        timer_secs.set(3 * 60);
+        timer_bank.update(|b| {
+            b.switch_to(TimerKind::Prep(side));
+        });
+        timer_secs.set(timer_bank.get_untracked().prep_secs(side));
         timer_label.set(format!("{} prep time ⏱️", side.label()));
+        timer_announcement.set(String::new());
+    };
+    // The only way a prep balance returns to 3:00: this explicit,
+    // per-team action. Resetting the on-screen prep stops its countdown;
+    // resetting the other team's prep disturbs nothing else.
+    let reset_prep = move |side: Side| {
+        if timer_bank.get_untracked().active() == TimerKind::Prep(side) {
+            stop_timer();
+            timer_secs.set(PREP_SECS);
+        }
+        timer_bank.update(|b| b.reset_prep(side));
+    };
+    // Shared Reset: in prep it only returns to the (preserved) speech
+    // timer — it must never silently refill prep. During a speech it
+    // restarts that speech's full time, as before.
+    let reset_or_back = move |_| {
+        stop_timer();
+        if matches!(timer_bank.get_untracked().active(), TimerKind::Prep(_)) {
+            // Read the banked speech remainder before Speech becomes the
+            // active kind (`secs_for` reports the display for the active one).
+            let speech_secs = timer_bank.get_untracked().secs_for(TimerKind::Speech, 0);
+            timer_bank.update(|b| {
+                b.switch_to(TimerKind::Speech);
+            });
+            timer_secs.set(speech_secs);
+        } else {
+            let full = (GUIDE[step.get_untracked()].minutes * 60).cast_signed();
+            timer_bank.update(|b| {
+                b.start_speech(full);
+            });
+            timer_secs.set(full);
+        }
+        timer_label.set(GUIDE[step.get_untracked()].title.to_string());
         timer_announcement.set(String::new());
     };
 
@@ -144,6 +196,9 @@ pub fn App() -> impl IntoView {
                             st_clear.replace(RoundData::default());
                             save(&st_clear);
                             set_step(0);
+                            // A brand-new round is the other explicit prep
+                            // reset: both teams start again at 3:00.
+                            timer_bank.update(TimerBank::reset_all_prep);
                         }
                     }>"🫧 New round"</button>
                     <button class="btn btn-soft" on:click=move |_| print_page()>"🖨️ Print / save PDF"</button>
@@ -245,14 +300,22 @@ pub fn App() -> impl IntoView {
                             <button class="btn btn-main" on:click=toggle_timer>
                                 {move || if running.get() { "⏸ Pause" } else { "▶ Start" }}
                             </button>
-                            <button class="btn btn-soft" on:click=move |_| { stop_timer(); timer_secs.set((GUIDE[step.get_untracked()].minutes * 60) as i32); timer_label.set(GUIDE[step.get_untracked()].title.to_string()); timer_announcement.set(String::new()); }>
-                                "↺ Reset"
+                            <button class="btn btn-soft" on:click=reset_or_back>
+                                {move || if matches!(timer_bank.get().active(), TimerKind::Prep(_)) { "↺ Back to speech" } else { "↺ Reset" }}
                             </button>
                         </div>
                         <div class="prep-row">
-                            <span>"Prep (3:00 each):"</span>
-                            <button class="btn btn-chip btn-pro" on:click=move |_| start_prep(Side::Pro)>"🌸 Pro"</button>
-                            <button class="btn btn-chip btn-con" on:click=move |_| start_prep(Side::Con)>"🍃 Con"</button>
+                            <span>"Prep left (3:00 per team, whole round):"</span>
+                            <button class="btn btn-chip btn-pro" on:click=move |_| start_prep(Side::Pro)>
+                                {move || format!("🌸 Pro · {}", fmt_time(timer_bank.get().secs_for(TimerKind::Prep(Side::Pro), timer_secs.get())))}
+                            </button>
+                            <button class="btn btn-chip" title="Reset only Pro prep back to 3:00" aria-label="Reset only Pro prep back to 3:00"
+                                on:click=move |_| { if confirm("Reset only 🌸 Pro prep back to 3:00?") { reset_prep(Side::Pro); } }>"↺ 🌸"</button>
+                            <button class="btn btn-chip btn-con" on:click=move |_| start_prep(Side::Con)>
+                                {move || format!("🍃 Con · {}", fmt_time(timer_bank.get().secs_for(TimerKind::Prep(Side::Con), timer_secs.get())))}
+                            </button>
+                            <button class="btn btn-chip" title="Reset only Con prep back to 3:00" aria-label="Reset only Con prep back to 3:00"
+                                on:click=move |_| { if confirm("Reset only 🍃 Con prep back to 3:00?") { reset_prep(Side::Con); } }>"↺ 🍃"</button>
                         </div>
                         <div class="step-nav">
                             <button class="btn btn-soft" disabled={move || step.get() == 0}
