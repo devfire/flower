@@ -1,7 +1,7 @@
 use crate::model::*;
 use crate::shorthand::{InsertCtx, TextTarget, insert_shorthand};
 use crate::state::*;
-use crate::timer::{TimerBank, TimerKind, PREP_SECS};
+use crate::timer::{PREP_SECS, TimerBank, TimerKind};
 use gloo_timers::callback::Interval;
 use leptos::prelude::*;
 
@@ -408,7 +408,7 @@ pub fn App() -> impl IntoView {
                     <li>"Which side " <b>"extended"</b> " ➜ their arguments into Summary & Final Focus?"</li>
                     <li>"In Final Focus, who gave the better " <b>"weighing"</b> " ⚖️ — bigger, sooner, or more likely impact?"</li>
                 </ol>
-                <DroppedHints state=state.clone() />
+                <DroppedHints state=state.clone() step=step />
                 <div class="winner-row no-print">
                     <span>"I vote for:"</span>
                     <button class="btn winner-btn btn-pro" class:winner-on=move || state.winner.get() == "Pro"
@@ -457,39 +457,23 @@ fn decision_text(state: &RoundState) -> String {
 }
 
 #[component]
-fn DroppedHints(state: RoundState) -> impl IntoView {
-    // Derived read-only summary; re-renders are fine here (no inputs inside).
+fn DroppedHints(state: RoundState, step: RwSignal<usize>) -> impl IntoView {
+    // Tracked snapshot + the guide step: hints re-derive live as the
+    // judge types, and nothing is flagged before its rebuttal is over.
     move || {
-        let d = state.snapshot();
-        let mut hints: Vec<String> = Vec::new();
-        for (rows, owner, answer_col, answerer) in [
-            (&d.pro_rows, "Pro", 3usize, "Con"),
-            (&d.con_rows, "Con", 2usize, "Pro"),
-        ] {
-            for row in rows {
-                let origin = row.cells.first().map(|c| c.text.trim()).unwrap_or("");
-                let origin = if owner == "Pro" {
-                    origin
-                } else {
-                    row.cells.get(1).map(|c| c.text.trim()).unwrap_or("")
-                };
-                if origin.is_empty() {
-                    continue;
-                }
-                let answered = row
-                    .cells
-                    .get(answer_col)
-                    .is_some_and(|c| !c.text.trim().is_empty());
-                if !answered {
-                    let name = if row.title.trim().is_empty() {
-                        origin
-                    } else {
-                        row.title.trim()
-                    };
-                    hints.push(format!("💤 {owner}'s “{name}” got no {answerer} rebuttal answer — if it was extended, it may decide the round."));
-                }
-            }
-        }
+        let hints: Vec<String> = state
+            .snapshot_tracked()
+            .dropped_arguments(step.get())
+            .into_iter()
+            .map(|d| {
+                format!(
+                    "💤 {}'s “{}” got no {} answer in any speech so far — if it was extended, it may decide the round.",
+                    d.owner.label(),
+                    d.name,
+                    d.answerer.label()
+                )
+            })
+            .collect();
         if hints.is_empty() {
             view! { <p class="dropped-none">"✨ No clearly dropped arguments spotted yet — check for blank answer boxes on each row."</p> }.into_any()
         } else {

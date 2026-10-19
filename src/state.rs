@@ -7,7 +7,7 @@ use std::cell::{Cell, RefCell};
 use crate::model::*;
 use gloo_timers::callback::Timeout;
 use leptos::prelude::*;
-use wasm_bindgen::{closure::Closure, JsCast};
+use wasm_bindgen::{JsCast, closure::Closure};
 
 #[derive(Clone, Copy)]
 pub struct CellState {
@@ -47,6 +47,22 @@ impl RowState {
                 .map(|c| CellData {
                     text: c.text.get_untracked(),
                     mark: c.mark.get_untracked(),
+                })
+                .collect(),
+        }
+    }
+    /// Tracked twin of `to_data`: reading with `get()` subscribes the
+    /// calling reactive scope, so derived views re-run on every edit.
+    fn to_data_tracked(&self) -> RowData {
+        RowData {
+            id: self.id,
+            title: self.title.get(),
+            cells: self
+                .cells
+                .iter()
+                .map(|c| CellData {
+                    text: c.text.get(),
+                    mark: c.mark.get(),
                 })
                 .collect(),
         }
@@ -114,6 +130,33 @@ impl RoundState {
             winner: self.winner.get_untracked(),
             rfd: self.rfd.get_untracked(),
             next_id: self.next_id.get_untracked(),
+        }
+    }
+
+    /// Tracked twin of `snapshot`, for derived views (dropped-argument
+    /// hints) that must update live as the judge types. Never use it for
+    /// saving/export: it subscribes the caller to every cell in the round.
+    pub fn snapshot_tracked(&self) -> RoundData {
+        RoundData {
+            topic: self.topic.get(),
+            pro_team: self.pro_team.get(),
+            con_team: self.con_team.get(),
+            pro_rows: self
+                .pro_rows
+                .get()
+                .iter()
+                .map(RowState::to_data_tracked)
+                .collect(),
+            con_rows: self
+                .con_rows
+                .get()
+                .iter()
+                .map(RowState::to_data_tracked)
+                .collect(),
+            crossfire_notes: self.crossfire_notes.get(),
+            winner: self.winner.get(),
+            rfd: self.rfd.get(),
+            next_id: self.next_id.get(),
         }
     }
 
@@ -304,11 +347,7 @@ fn install_flush_hooks() {
     }
 }
 
-fn add_flush_listener(
-    target: &web_sys::EventTarget,
-    name: &str,
-    closure: FlushListener,
-) {
+fn add_flush_listener(target: &web_sys::EventTarget, name: &str, closure: FlushListener) {
     let _ = target.add_event_listener_with_callback(name, closure.as_ref().unchecked_ref());
     FLUSH_LISTENERS.with(|listeners| listeners.borrow_mut().push(closure));
 }

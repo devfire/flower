@@ -296,6 +296,16 @@ impl Default for RoundData {
     }
 }
 
+/// An argument the opponent had a fair chance to answer — their rebuttal
+/// speech is over — yet every opponent answer box on its row is blank.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct DroppedArgument {
+    pub owner: Side,
+    pub answerer: Side,
+    /// Row title if the judge gave one, else the argument's own text.
+    pub name: String,
+}
+
 impl RoundData {
     /// Parse a saved round, repairing anything a truncated, older, or
     /// hand-edited save may contain. Only genuinely unparseable JSON (or a
@@ -363,6 +373,69 @@ impl RoundData {
             && blank(&self.rfd)
             && self.pro_rows.iter().all(row_blank)
             && self.con_rows.iter().all(row_blank)
+    }
+
+    /// Arguments that look dropped at guide step `guide_step` (an index
+    /// into `GUIDE`). Pure so the ballot hints can be unit-tested and the
+    /// view only has to feed it a tracked snapshot.
+    ///
+    /// A row is dropped only when the opponent's rebuttal speech is
+    /// already over (a blank box mid-round is expected, not a signal) and
+    /// *every* opponent-speech box on the row up to the last finished
+    /// speech is blank — an answer in Constructive, Summary, or Final
+    /// Focus counts just as much as one in Rebuttal.
+    #[must_use]
+    pub fn dropped_arguments(&self, guide_step: usize) -> Vec<DroppedArgument> {
+        // Highest flow column whose speech ended before the current step.
+        let completed = GUIDE
+            .iter()
+            .take(guide_step.min(GUIDE.len()))
+            .filter_map(|g| g.flow_col)
+            .max();
+        let Some(completed) = completed else {
+            return Vec::new();
+        };
+        let mut dropped = Vec::new();
+        // (rows, owner, origin column, opponent's rebuttal column)
+        for (rows, owner, origin_col, rebuttal_col) in [
+            (&self.pro_rows, Side::Pro, 0usize, 3usize),
+            (&self.con_rows, Side::Con, 1usize, 2usize),
+        ] {
+            // This side has not had its rebuttal yet: never flag.
+            if rebuttal_col > completed {
+                continue;
+            }
+            let answerer = match owner {
+                Side::Pro => Side::Con,
+                Side::Con => Side::Pro,
+            };
+            for row in rows {
+                let origin = row.cells.get(origin_col).map_or("", |c| c.text.trim());
+                if origin.is_empty() {
+                    continue;
+                }
+                // Any opponent box counts, even in the speech happening
+                // now: text there means the answer was given.
+                let has_answer = row.cells.iter().enumerate().any(|(col, cell)| {
+                    col > origin_col
+                        && SPEECH_COLS.get(col).is_some_and(|s| s.side == answerer)
+                        && !cell.text.trim().is_empty()
+                });
+                if !has_answer {
+                    let title = row.title.trim();
+                    dropped.push(DroppedArgument {
+                        owner,
+                        answerer,
+                        name: if title.is_empty() {
+                            origin.to_owned()
+                        } else {
+                            title.to_owned()
+                        },
+                    });
+                }
+            }
+        }
+        dropped
     }
 
     pub fn sample() -> Self {
@@ -583,5 +656,104 @@ mod tests {
         assert!(RoundData::from_saved_json("{not json").is_err());
         assert!(RoundData::from_saved_json("{\"topic\":42}").is_err());
         assert!(RoundData::from_saved_json("[1,2,3]").is_err());
+    }
+
+    // GUIDE steps: 3 = Pro Rebuttal, 4 = Con Rebuttal, 5 = crossfire
+    // after it, 7 = Con Summary, 8 = Grand Crossfire, 10 = Con Final Focus.
+    fn pro_round(answer_col: Option<usize>) -> RoundData {
+        let mut row = RowData::new(1, "C1: Oceans");
+        row.cells[0].text = "Plastic harms oceans".to_owned();
+        if let Some(col) = answer_col {
+            row.cells[col].text = "an answer".to_owned();
+        }
+        RoundData {
+            pro_rows: vec![row],
+            con_rows: Vec::new(),
+            ..RoundData::default()
+        }
+    }
+
+    fn con_round(answer_col: Option<usize>) -> RoundData {
+        let mut row = RowData::new(1, "");
+        row.cells[1].text = "Ban costs small shops".to_owned();
+        if let Some(col) = answer_col {
+            row.cells[col].text = "an answer".to_owned();
+        }
+        RoundData {
+            pro_rows: Vec::new(),
+            con_rows: vec![row],
+            ..RoundData::default()
+        }
+    }
+
+    #[test]
+    fn no_dropped_hints_before_that_sides_rebuttal_is_over() {
+        // Pro is answerable by Con, whose rebuttal is GUIDE step 4.
+        for step in [0, 1, 4] {
+            assert!(
+                pro_round(None).dropped_arguments(step).is_empty(),
+                "Pro flagged at guide step {step}, before Con Rebuttal ended"
+            );
+        }
+        // Con is answerable by Pro, whose rebuttal is GUIDE step 3.
+        for step in [0, 1, 3] {
+            assert!(
+                con_round(None).dropped_arguments(step).is_empty(),
+                "Con flagged at guide step {step}, before Pro Rebuttal ended"
+            );
+        }
+    }
+
+    #[test]
+    fn unanswered_after_rebuttal_is_flagged_for_both_sides() {
+        let pro = pro_round(None).dropped_arguments(5);
+        assert_eq!(pro.len(), 1);
+        assert_eq!(pro[0].owner, Side::Pro);
+        assert_eq!(pro[0].answerer, Side::Con);
+        assert_eq!(pro[0].name, "C1: Oceans");
+
+        // Untitled Con row falls back to the argument's own text.
+        let con = con_round(None).dropped_arguments(4);
+        assert_eq!(con.len(), 1);
+        assert_eq!(con[0].owner, Side::Con);
+        assert_eq!(con[0].answerer, Side::Pro);
+        assert_eq!(con[0].name, "Ban costs small shops");
+
+        // Whitespace is not an answer; blank origins are not arguments.
+        let mut whitespace = pro_round(Some(3));
+        whitespace.pro_rows[0].cells[3].text = "  \n ".to_owned();
+        assert_eq!(whitespace.dropped_arguments(10).len(), 1);
+        let blank = RoundData {
+            pro_rows: vec![RowData::new(1, "titled but unwritten")],
+            con_rows: Vec::new(),
+            ..RoundData::default()
+        };
+        assert!(blank.dropped_arguments(10).is_empty());
+    }
+
+    #[test]
+    fn answers_outside_rebuttal_column_count_as_answered() {
+        // Pro row answered in Con Constructive (1), Rebuttal (3),
+        // Summary (5), or Final Focus (7) is never dropped.
+        for (answer_col, step) in [(1, 10), (3, 10), (5, 8), (7, 10)] {
+            assert!(
+                pro_round(Some(answer_col))
+                    .dropped_arguments(step)
+                    .is_empty(),
+                "Pro answer in column {answer_col} ignored at step {step}"
+            );
+        }
+        // Con row answered in Pro Rebuttal (2) or Pro Summary (4).
+        for (answer_col, step) in [(2, 10), (4, 7)] {
+            assert!(
+                con_round(Some(answer_col))
+                    .dropped_arguments(step)
+                    .is_empty(),
+                "Con answer in column {answer_col} ignored at step {step}"
+            );
+        }
+        // The owner's own later speeches are extensions, not answers:
+        // a Pro row only extended in Pro Summary (4) is still dropped.
+        assert_eq!(pro_round(Some(4)).dropped_arguments(10).len(), 1);
     }
 }
