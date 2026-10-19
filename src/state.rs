@@ -362,6 +362,47 @@ pub fn print_page() {
     }
 }
 
+/// Bring the current speech's flow column into view after a step change.
+///
+/// Deferred past the reactive DOM update (`Timeout` fires after the
+/// microtask Leptos flushes signal changes in), so the sheet switched to
+/// by the new step is mounted and carries `.fh-now` when we look for it.
+/// `block: start` puts the column header at the top of the viewport with
+/// the writing cells right beneath it; `inline: center` centres the column inside `.flow-scroll`, so
+/// it is fully visible even on a phone narrower than the grid. Honours
+/// `prefers-reduced-motion` by jumping instead of smooth-scrolling.
+pub fn scroll_current_column_into_view() {
+    Timeout::new(0, || {
+        let Some(window) = web_sys::window() else {
+            return;
+        };
+        let Some(document) = window.document() else {
+            return;
+        };
+        // Scoped to the interactive sheet: the print-only sheets never
+        // carry `.fh-now` (their `current_col` is `None`), and this keeps
+        // it that way by construction.
+        let Ok(Some(header)) = document.query_selector(".flow-card .fh-now") else {
+            return;
+        };
+        let reduced_motion = window
+            .match_media("(prefers-reduced-motion: reduce)")
+            .ok()
+            .flatten()
+            .is_some_and(|query| query.matches());
+        let options = web_sys::ScrollIntoViewOptions::new();
+        options.set_behavior(if reduced_motion {
+            web_sys::ScrollBehavior::Auto
+        } else {
+            web_sys::ScrollBehavior::Smooth
+        });
+        options.set_block(web_sys::ScrollLogicalPosition::Start);
+        options.set_inline(web_sys::ScrollLogicalPosition::Center);
+        header.scroll_into_view_with_scroll_into_view_options(&options);
+    })
+    .forget();
+}
+
 pub fn copy_text(text: &str) {
     if let Some(w) = web_sys::window() {
         let _ = w.navigator().clipboard().write_text(text);

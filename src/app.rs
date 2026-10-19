@@ -60,8 +60,9 @@ pub fn App() -> impl IntoView {
         // Dropping the Interval cancels it: no callbacks fire afterwards.
         interval.set_value(None);
     };
-    let set_step = move |next: usize| {
+    let set_step_impl = move |next: usize, scroll: bool| {
         let next = next.min(GUIDE.len() - 1);
+        let changed = step.get_untracked() != next;
         step.set(next);
         stop_timer();
         let full = (GUIDE[next].minutes * 60) as i32;
@@ -81,7 +82,15 @@ pub fn App() -> impl IntoView {
         if let Some(side) = sheet {
             tab.set(side);
         }
+        // Advancing the walk must leave the judge looking at the column
+        // they are about to write in (issue #10) — except for resets like
+        // "New round", which pass `scroll: false` and leave them at the top.
+        // Crossfire steps have no column, so there is nothing to reveal.
+        if scroll && changed && GUIDE[next].flow_col.is_some() {
+            scroll_current_column_into_view();
+        }
     };
+    let set_step = move |next: usize| set_step_impl(next, true);
     let toggle_timer = move |_| {
         if running.get_untracked() {
             stop_timer();
@@ -196,7 +205,7 @@ pub fn App() -> impl IntoView {
                         if confirm("Start a brand-new round? This clears the current flow.") {
                             st_clear.replace(RoundData::default());
                             save(&st_clear);
-                            set_step(0);
+                            set_step_impl(0, false);
                             // A brand-new round is the other explicit prep
                             // reset: both teams start again at 3:00.
                             timer_bank.update(TimerBank::reset_all_prep);
