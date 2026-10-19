@@ -397,6 +397,7 @@ pub fn App() -> impl IntoView {
                     on:focus=move |_| insert_ctx.focus(TextTarget::CrossfireNotes)
                     prop:value=move || state.crossfire_notes.get()
                     on:input={let s = state.clone(); move |ev| { s.crossfire_notes.set(event_target_value(&ev)); save(&s); }}></textarea>
+                <div class="notes-print" aria-hidden="true">{move || state.crossfire_notes.get()}</div>
             </section>
 
             // ---------- Decision ----------
@@ -427,6 +428,7 @@ pub fn App() -> impl IntoView {
                         placeholder="“I voted ___ because the ___ argument was dropped / extended / weighed better when…”"
                         prop:value=move || state.rfd.get()
                         on:input={let s = state.clone(); move |ev| { s.rfd.set(event_target_value(&ev)); save(&s); }}></textarea>
+                    <div class="notes-print" aria-hidden="true">{move || state.rfd.get()}</div>
                 </label>
                 <div class="ballot-actions no-print">
                     <button class="btn btn-main" on:click=move |_| copy_text(&decision_text(&st_export))>"📋 Copy decision summary"</button>
@@ -560,6 +562,7 @@ fn FlowRow(
                 on:focus=move |_| if let Some(ctx) = insert_ctx { ctx.focus(title_target) }
                 prop:value=move || row.title.get()
                 on:input={let s = state.clone(); let r = row.clone(); move |ev| { r.title.set(event_target_value(&ev)); save(&s); }} />
+            <div class="title-print" aria-hidden="true">{move || row.title.get()}</div>
             <button class="row-del no-print" title="Delete this argument row"
                 on:click={let s = state.clone(); move |_| {
                     if confirm("Delete this argument row?") { s.remove_row(side, row_id); }
@@ -584,6 +587,7 @@ fn FlowRow(
                         prop:value=move || cell.text.get()
                         on:input={let s = state.clone(); move |ev| { cell.text.set(event_target_value(&ev)); save(&s); }}
                         on:focus=move |_| if let Some(ctx) = insert_ctx { ctx.focus(cell_target) }></textarea>
+                    <div class="cell-print" aria-hidden="true">{move || cell.text.get()}</div>
                     <div class="cell-marks no-print">
                         {[(Mark::Dropped, "💤 dropped"), (Mark::Extended, "➜ extended"), (Mark::Key, "⭐ key")].into_iter().map(|(mark, label)| {
                             view! {

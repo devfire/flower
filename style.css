@@ -1,4 +1,7 @@
 .print-only { display: none; }
+/* Static copies of textarea/input text, shown only in print: a textarea
+   prints just its visible rows, so long notes would be truncated. */
+.cell-print, .title-print, .notes-print { display: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 :root {
   --bg: #eff7fd;
@@ -281,16 +284,40 @@ button, input, textarea { font: inherit; color: inherit; }
 }
 
 /* ---------- print: the paper flow, both sheets ---------- */
+@page { size: landscape; margin: 8mm; }
 @media print {
   .no-print, .hero-actions, .guide-card, .tabs, .cell-marks, .row-del, .add-row { display: none !important; }
-  .print-only { display: block !important; }
+  .print-only { display: block !important; break-inside: auto; }
+  /* Each sheet starts its own landscape page, like the two paper pages. */
+  .print-only h2:not(:first-of-type) { break-before: page; }
   .flow-card { display: none !important; }
-  body { background: #fff; }
-  .page { max-width: none; padding: 0; }
-  .card, .hero { box-shadow: none; border-color: #ccc; break-inside: avoid; }
-  .flow-scroll { overflow: visible; }
-  .flow-grid { min-width: 0; }
-  .cell textarea { min-height: 48px; }
+  body { background: #fff; font-size: 9pt; }
+  .page { max-width: none; padding: 0; gap: 8px; }
+  .card, .hero { box-shadow: none; border-color: #ccc; break-inside: avoid; padding: 10px; }
+  /* The 9-column grid must fit the landscape page width: shrink type,
+     gaps and padding instead of clipping the rightmost columns. */
+  .flow-scroll { overflow: visible; padding: 0; }
+  .flow-grid { min-width: 0; width: 100%; gap: 4px; }
+  .fh { font-size: 7.5pt; padding: 4px 5px; border: 1px solid #ccc; }
+  .fh-sub { font-size: 6.5pt; }
+  .cell { padding: 4px; border-width: 1px; break-inside: avoid; }
+  .cell-arrow { display: none; }
+  /* Textareas print only their visible viewport — hide them and show
+     the static print copies, which expand to the full text. */
+  .cell textarea, .big-notes, .fr-title input { display: none !important; }
+  .cell-print {
+    display: block; white-space: pre-wrap; overflow-wrap: break-word;
+    font-weight: 600; line-height: 1.35; font-size: 8pt; min-height: 34px;
+  }
+  .title-print {
+    display: block; white-space: pre-wrap; overflow-wrap: break-word;
+    font-family: "Fredoka", sans-serif; font-weight: 600; font-size: 8.5pt; line-height: 1.3;
+  }
+  .notes-print {
+    display: block; white-space: pre-wrap; overflow-wrap: break-word;
+    font-weight: 600; line-height: 1.4; font-size: 9pt; min-height: 34px;
+    border: 1px solid #ccc; border-radius: 8px; padding: 6px 8px;
+  }
   .mark-print { display: inline; }
   .winner-print { display: block; }
   .cell-dim, .fh-dim { opacity: 1; filter: none; }
