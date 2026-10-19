@@ -26,7 +26,6 @@ impl Side {
             Side::Con => "🍃",
         }
     }
-
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize, Default)]
@@ -60,14 +59,46 @@ pub struct SpeechCol {
 }
 
 pub const SPEECH_COLS: [SpeechCol; 8] = [
-    SpeechCol { full: "Pro Constructive", side: Side::Pro, minutes: 4 },
-    SpeechCol { full: "Con Constructive", side: Side::Con, minutes: 4 },
-    SpeechCol { full: "Pro Rebuttal", side: Side::Pro, minutes: 4 },
-    SpeechCol { full: "Con Rebuttal", side: Side::Con, minutes: 4 },
-    SpeechCol { full: "Pro Summary", side: Side::Pro, minutes: 3 },
-    SpeechCol { full: "Con Summary", side: Side::Con, minutes: 3 },
-    SpeechCol { full: "Pro Final Focus", side: Side::Pro, minutes: 2 },
-    SpeechCol { full: "Con Final Focus", side: Side::Con, minutes: 2 },
+    SpeechCol {
+        full: "Pro Constructive",
+        side: Side::Pro,
+        minutes: 4,
+    },
+    SpeechCol {
+        full: "Con Constructive",
+        side: Side::Con,
+        minutes: 4,
+    },
+    SpeechCol {
+        full: "Pro Rebuttal",
+        side: Side::Pro,
+        minutes: 4,
+    },
+    SpeechCol {
+        full: "Con Rebuttal",
+        side: Side::Con,
+        minutes: 4,
+    },
+    SpeechCol {
+        full: "Pro Summary",
+        side: Side::Pro,
+        minutes: 3,
+    },
+    SpeechCol {
+        full: "Con Summary",
+        side: Side::Con,
+        minutes: 3,
+    },
+    SpeechCol {
+        full: "Pro Final Focus",
+        side: Side::Pro,
+        minutes: 2,
+    },
+    SpeechCol {
+        full: "Con Final Focus",
+        side: Side::Con,
+        minutes: 2,
+    },
 ];
 
 /// One step of the guided walk through the whole round (includes crossfires).
@@ -86,77 +117,110 @@ pub struct GuideStep {
 
 pub const GUIDE: [GuideStep; 11] = [
     GuideStep {
-        title: "Pro Constructive", side: Some(Side::Pro), minutes: 4, flow_col: Some(0),
+        title: "Pro Constructive",
+        side: Some(Side::Pro),
+        minutes: 4,
+        flow_col: Some(0),
         bubble: "First speech! Just catch the big ideas — nobody flows every word. ♡",
         listen_for: "“Our first contention is…” — each contention is a new row on the 🌸 Pro sheet.",
         do_it: "Start one row per contention. Write 3–6 words: the claim + why it matters (the “impact”).",
         watch_out: "Don't write full sentences. Tone + signposting tell you what matters most.",
     },
     GuideStep {
-        title: "Con Constructive", side: Some(Side::Con), minutes: 4, flow_col: Some(1),
+        title: "Con Constructive",
+        side: Some(Side::Con),
+        minutes: 4,
+        flow_col: Some(1),
         bubble: "Flip to the 🍃 Con sheet — their case gets its own page, just like paper!",
         listen_for: "Con's own contentions. They may also start answering Pro — but their case comes first.",
         do_it: "One row per Con contention on the Con sheet, same as before. Claim + impact, short and sweet.",
         watch_out: "Keep the sheets separate in your head: blue rows = Pro's case, green rows = Con's case.",
     },
     GuideStep {
-        title: "Crossfire", side: None, minutes: 3, flow_col: None,
+        title: "Crossfire",
+        side: None,
+        minutes: 3,
+        flow_col: None,
         bubble: "Pencils down, relax! ☕ Crossfire is questions — you don't have to flow it.",
         listen_for: "A clear concession (“yes, that's true”) or a debater unable to answer.",
         do_it: "Only jot a note in the Crossfire Notes box below if something big is admitted.",
         watch_out: "Don't decide anything yet — crossfire alone doesn't win rounds, the flow does.",
     },
     GuideStep {
-        title: "Pro Rebuttal", side: Some(Side::Pro), minutes: 4, flow_col: Some(2),
+        title: "Pro Rebuttal",
+        side: Some(Side::Pro),
+        minutes: 4,
+        flow_col: Some(2),
         bubble: "Now they answer each other! Write answers in the box directly RIGHT of the argument. ➜",
         listen_for: "“They say…, but…” — Pro is now answering the 🍃 Con case.",
         do_it: "On the Con sheet, write Pro's answer in the Pro Reb column, on the same row as the Con argument it answers.",
         watch_out: "A Con row with a blank Pro Reb box = that argument went unanswered. Leave it blank on purpose!",
     },
     GuideStep {
-        title: "Con Rebuttal", side: Some(Side::Con), minutes: 4, flow_col: Some(3),
+        title: "Con Rebuttal",
+        side: Some(Side::Con),
+        minutes: 4,
+        flow_col: Some(3),
         bubble: "Same thing, other direction — Con answers Pro on the 🌸 Pro sheet. You’ve got this!",
         listen_for: "Con answering each Pro contention, and defending their own case.",
         do_it: "On the Pro sheet, fill the Con Reb column row-by-row. Blank box = dropped argument — tap 💤 on the original.",
         watch_out: "New evidence names/dates? Just write the author's last name, e.g. “Smith '24”.",
     },
     GuideStep {
-        title: "Crossfire", side: None, minutes: 3, flow_col: None,
+        title: "Crossfire",
+        side: None,
+        minutes: 3,
+        flow_col: None,
         bubble: "Second crossfire — breathe, stretch, sip water. 🌷",
         listen_for: "Either side clarifying what their strongest argument is.",
         do_it: "Star ⭐ anything on your flow that keeps coming up — it's probably deciding the round.",
         watch_out: "Speakers may sound confident about arguments that aren't on the flow. Trust your paper.",
     },
     GuideStep {
-        title: "Pro Summary", side: Some(Side::Pro), minutes: 3, flow_col: Some(4),
+        title: "Pro Summary",
+        side: Some(Side::Pro),
+        minutes: 3,
+        flow_col: Some(4),
         bubble: "Summaries = “extend” time. If they carry an argument forward, draw your arrow ➜!",
         listen_for: "“Extend our…” and picking their best 1–2 arguments to focus on.",
         do_it: "Write the extension in the Pro Sum column on the same row, and tap ➜ extended on it.",
         watch_out: "Arguments NOT mentioned here are usually gone for good — Pro can't revive them later.",
     },
     GuideStep {
-        title: "Con Summary", side: Some(Side::Con), minutes: 3, flow_col: Some(5),
+        title: "Con Summary",
+        side: Some(Side::Con),
+        minutes: 3,
+        flow_col: Some(5),
         bubble: "Con does the same — which of their arguments survive? 🍃",
         listen_for: "“Extend…” plus answers to Pro's summary choices.",
         do_it: "Fill the Con Sum column on both sheets where Con speaks to that row. Mark ➜ extended.",
         watch_out: "Compare: which side still has live, answered-for arguments? That picture is the ballot forming.",
     },
     GuideStep {
-        title: "Grand Crossfire", side: None, minutes: 3, flow_col: None,
+        title: "Grand Crossfire",
+        side: None,
+        minutes: 3,
+        flow_col: None,
         bubble: "Everyone's in! Last questions — almost there, you're doing great. ✨",
         listen_for: "“Why should the judge vote for you?” — they'll name their voting issues.",
         do_it: "Write those 1–2 named reasons in Crossfire Notes. Compare them with your ⭐ rows.",
         watch_out: "Grand crossfire claims still need to exist on the flow to count.",
     },
     GuideStep {
-        title: "Pro Final Focus", side: Some(Side::Pro), minutes: 2, flow_col: Some(6),
+        title: "Pro Final Focus",
+        side: Some(Side::Pro),
+        minutes: 2,
+        flow_col: Some(6),
         bubble: "Final Focus = “judge, vote for us because…”. Listen for weighing! ⚖️",
         listen_for: "Weighing words: bigger, sooner, more likely, “even if they win…”.",
         do_it: "Write their #1 reason in the Pro FF column on that argument's row. Star ⭐ it.",
         watch_out: "No brand-new arguments should appear here — if it's not on the flow already, be skeptical.",
     },
     GuideStep {
-        title: "Con Final Focus", side: Some(Side::Con), minutes: 2, flow_col: Some(7),
+        title: "Con Final Focus",
+        side: Some(Side::Con),
+        minutes: 2,
+        flow_col: Some(7),
         bubble: "Last speech! After this, the ballot below walks you through deciding. 🌸",
         listen_for: "Con's #1 reason + their weighing against Pro's #1 reason.",
         do_it: "Fill the Con FF column, star ⭐ their key argument, then scroll to “Your Decision”.",
@@ -164,18 +228,30 @@ pub const GUIDE: [GuideStep; 11] = [
     },
 ];
 
+/// `#[serde(default)]`: a save missing a field loads with that field
+/// defaulted instead of failing the whole round (see `RoundData::normalised`).
 #[derive(Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct CellData {
     pub text: String,
     pub mark: Mark,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct RowData {
     pub id: u32,
     pub title: String,
     /// Invariant: exactly `SPEECH_COLS.len()` cells, one per speech.
+    /// Deserialised data may violate it; `RoundData::normalised` restores it
+    /// before any row reaches the UI.
     pub cells: Vec<CellData>,
+}
+
+impl Default for RowData {
+    fn default() -> Self {
+        Self::new(0, "")
+    }
 }
 
 impl RowData {
@@ -183,12 +259,15 @@ impl RowData {
         Self {
             id,
             title: title.to_owned(),
-            cells: (0..SPEECH_COLS.len()).map(|_| CellData::default()).collect(),
+            cells: (0..SPEECH_COLS.len())
+                .map(|_| CellData::default())
+                .collect(),
         }
     }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct RoundData {
     pub topic: String,
     pub pro_team: String,
@@ -218,6 +297,54 @@ impl Default for RoundData {
 }
 
 impl RoundData {
+    /// Parse a saved round, repairing anything a truncated, older, or
+    /// hand-edited save may contain. Only genuinely unparseable JSON (or a
+    /// field of the wrong type) is an `Err`; callers must preserve the raw
+    /// text in that case rather than overwrite it.
+    ///
+    /// # Errors
+    /// Returns the `serde_json` error when `json` is not a readable round.
+    pub fn from_saved_json(json: &str) -> Result<Self, serde_json::Error> {
+        serde_json::from_str(json).map(Self::normalised)
+    }
+
+    /// Restore the invariants the UI relies on: exactly `SPEECH_COLS.len()`
+    /// cells per row (pad short rows, drop extra cells), unique row ids
+    /// (later duplicates get fresh ids), and `next_id` above every row id
+    /// so a future row can never reuse one.
+    #[must_use]
+    pub fn normalised(mut self) -> Self {
+        use std::collections::HashSet;
+        // Fresh ids start above every existing id, so a repaired duplicate
+        // can never collide with a row not visited yet.
+        let mut fresh = self
+            .pro_rows
+            .iter()
+            .chain(&self.con_rows)
+            .map(|r| r.id)
+            .max()
+            .unwrap_or(0)
+            .saturating_add(1);
+        let mut seen = HashSet::new();
+        for row in self.pro_rows.iter_mut().chain(self.con_rows.iter_mut()) {
+            if !seen.insert(row.id) {
+                row.id = fresh;
+                seen.insert(fresh);
+                fresh = fresh.saturating_add(1);
+            }
+            row.cells.resize_with(SPEECH_COLS.len(), CellData::default);
+        }
+        let max_id = self
+            .pro_rows
+            .iter()
+            .chain(&self.con_rows)
+            .map(|r| r.id)
+            .max()
+            .unwrap_or(0);
+        self.next_id = self.next_id.max(max_id.saturating_add(1));
+        self
+    }
+
     /// True when nothing a judge typed or marked would be lost by replacing
     /// this round (whitespace alone does not count).
     pub fn is_empty(&self) -> bool {
@@ -287,6 +414,9 @@ pub const SHORTHAND: [(&str, &str); 16] = [
 ];
 
 pub const STORAGE_KEY: &str = "flower-round-v1";
+/// Where an unreadable save is copied before the app starts blank, so the
+/// raw round is never silently overwritten (issue #2).
+pub const STORAGE_BACKUP_KEY: &str = "flower-round-v1-unreadable-backup";
 
 #[cfg(test)]
 mod tests {
@@ -326,5 +456,132 @@ mod tests {
             ..RoundData::default()
         };
         assert!(!by_rfd.is_empty());
+    }
+
+    fn saved_json(round: &RoundData) -> serde_json::Value {
+        serde_json::to_value(round).unwrap_or(serde_json::Value::Null)
+    }
+
+    fn load(value: &serde_json::Value) -> Result<RoundData, serde_json::Error> {
+        RoundData::from_saved_json(&serde_json::to_string(value).unwrap_or_default())
+    }
+
+    #[test]
+    fn missing_any_single_top_level_field_loads_with_rest_intact() {
+        let mut sample = RoundData::sample();
+        sample.rfd = "Pro wins on weighing".to_owned();
+        sample.crossfire_notes = "Con conceded 9%".to_owned();
+        sample.winner = "Pro".to_owned();
+        let fields = [
+            "topic",
+            "pro_team",
+            "con_team",
+            "pro_rows",
+            "con_rows",
+            "crossfire_notes",
+            "winner",
+            "rfd",
+            "next_id",
+        ];
+        for field in fields {
+            let mut value = saved_json(&sample);
+            if let Some(obj) = value.as_object_mut() {
+                obj.remove(field);
+            }
+            let Ok(loaded) = load(&value) else {
+                panic!("save missing {field} must still load");
+            };
+            if field != "topic" {
+                assert_eq!(
+                    loaded.topic, sample.topic,
+                    "topic lost when {field} missing"
+                );
+            }
+            if field != "rfd" {
+                assert_eq!(loaded.rfd, sample.rfd, "rfd lost when {field} missing");
+            }
+            if field != "pro_rows" {
+                assert_eq!(loaded.pro_rows[0].title, sample.pro_rows[0].title);
+                assert_eq!(loaded.pro_rows[0].cells.len(), SPEECH_COLS.len());
+            }
+            // Repaired or not, next_id must stay usable for new rows.
+            let max_id = loaded
+                .pro_rows
+                .iter()
+                .chain(&loaded.con_rows)
+                .map(|r| r.id)
+                .max()
+                .unwrap_or(0);
+            assert!(
+                loaded.next_id > max_id,
+                "next_id unusable when {field} missing"
+            );
+        }
+    }
+
+    #[test]
+    fn missing_nested_fields_default_instead_of_failing_the_round() {
+        // Row without title, cell without mark, round without next_id.
+        let json = r#"{"topic":"T","pro_rows":[{"id":7,"cells":[{"text":"kept"}]}]}"#;
+        let Ok(loaded) = RoundData::from_saved_json(json) else {
+            panic!("partially-missing save must load");
+        };
+        assert_eq!(loaded.topic, "T");
+        assert_eq!(loaded.pro_rows[0].title, "");
+        assert_eq!(loaded.pro_rows[0].cells[0].text, "kept");
+        assert_eq!(loaded.pro_rows[0].cells[0].mark, Mark::None);
+        assert!(loaded.next_id > 7);
+    }
+
+    #[test]
+    fn rows_with_wrong_cell_counts_are_normalised_not_panicked_on() {
+        let mut wide = RowData::new(1, "wide");
+        wide.cells = (0..10)
+            .map(|i| CellData {
+                text: format!("c{i}"),
+                mark: Mark::None,
+            })
+            .collect();
+        let mut narrow = RowData::new(2, "narrow");
+        narrow.cells.truncate(3);
+        narrow.cells[2].text = "last kept".to_owned();
+        let round = RoundData {
+            pro_rows: vec![wide, narrow],
+            ..RoundData::default()
+        }
+        .normalised();
+        assert_eq!(round.pro_rows[0].cells.len(), SPEECH_COLS.len());
+        assert_eq!(round.pro_rows[0].cells[7].text, "c7");
+        assert_eq!(round.pro_rows[1].cells.len(), SPEECH_COLS.len());
+        assert_eq!(round.pro_rows[1].cells[2].text, "last kept");
+        assert_eq!(round.pro_rows[1].cells[7].text, "");
+    }
+
+    #[test]
+    fn duplicate_row_ids_are_repaired_and_next_id_clamped_above_them() {
+        let round = RoundData {
+            pro_rows: vec![RowData::new(2, "a"), RowData::new(2, "b")],
+            con_rows: vec![RowData::new(2, "c"), RowData::new(9, "d")],
+            next_id: 1,
+            ..RoundData::default()
+        }
+        .normalised();
+        let ids: Vec<u32> = round
+            .pro_rows
+            .iter()
+            .chain(&round.con_rows)
+            .map(|r| r.id)
+            .collect();
+        let unique: std::collections::HashSet<u32> = ids.iter().copied().collect();
+        assert_eq!(unique.len(), ids.len(), "duplicate ids remain: {ids:?}");
+        assert_eq!(round.pro_rows[0].id, 2, "first occurrence keeps its id");
+        assert!(round.next_id > *ids.iter().max().unwrap_or(&0));
+    }
+
+    #[test]
+    fn unparseable_or_wrongly_typed_saves_are_errors_not_blank_rounds() {
+        assert!(RoundData::from_saved_json("{not json").is_err());
+        assert!(RoundData::from_saved_json("{\"topic\":42}").is_err());
+        assert!(RoundData::from_saved_json("[1,2,3]").is_err());
     }
 }

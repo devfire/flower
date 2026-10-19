@@ -21,7 +21,9 @@ fn placeholder_for(sheet: Side, col: usize) -> &'static str {
 
 #[component]
 pub fn App() -> impl IntoView {
-    let state = RoundState::from_data(load_initial());
+    let loaded = load_initial();
+    let state = RoundState::from_data(loaded.data);
+    state.recovery_notice.set(loaded.recovery_notice);
     let step = RwSignal::new(0usize);
     let tab = RwSignal::new(Side::Pro);
     let focus_mode = RwSignal::new(true);
@@ -108,6 +110,8 @@ pub fn App() -> impl IntoView {
     };
 
     let st_flow = state.clone();
+    let st_notice = state.clone();
+    let st_saved = state.clone();
     let st_sample = state.clone();
     let st_clear = state.clone();
     let st_export = state.clone();
@@ -146,9 +150,21 @@ pub fn App() -> impl IntoView {
                 </div>
             </header>
 
+            {move || st_notice.recovery_notice.get().map(|notice| {
+                let s = st_notice.clone();
+                view! {
+                    <div class="save-warning" role="alert">
+                        <p>{notice}</p>
+                        <button class="btn btn-main" on:click=move |_| { s.recovery_notice.set(None); save(&s); }>
+                            "Start fresh & replace the old save"
+                        </button>
+                    </div>
+                }
+            })}
+
             // ---------- Round setup ----------
             <section class="card setup-card">
-                <h2><span class="card-ico">"🎀"</span> "1 · Set up the round" <span class="saved-note">"✓ auto-saves on this device"</span></h2>
+                <h2><span class="card-ico">"🎀"</span> "1 · Set up the round" <span class="saved-note" class:saved-note-failed=move || st_saved.save_failed.get()>{move || if st_saved.save_failed.get() { "⚠️ Not saved — this browser is blocking or out of storage; copy anything important before closing" } else { "✓ auto-saves on this device" }}</span></h2>
                 <div class="setup-grid">
                     <label class="field field-wide">
                         <span>"Resolution / topic"</span>
@@ -360,7 +376,9 @@ pub fn App() -> impl IntoView {
 fn insert_shorthand(state: &RoundState, focused: RwSignal<Option<(Side, u32, usize)>>, sym: &str) {
     if let Some((side, row_id, col)) = focused.get_untracked() {
         for row in state.rows(side).get_untracked().iter() {
-            if row.id == row_id && let Some(cell) = row.cells.get(col) {
+            if row.id == row_id
+                && let Some(cell) = row.cells.get(col)
+            {
                 cell.text.update(|t| {
                     if !t.is_empty() && !t.ends_with([' ', '\n']) {
                         t.push(' ');
@@ -375,7 +393,11 @@ fn insert_shorthand(state: &RoundState, focused: RwSignal<Option<(Side, u32, usi
 
 fn decision_text(state: &RoundState) -> String {
     let d = state.snapshot();
-    let winner = if d.winner.is_empty() { "—".to_string() } else { d.winner.clone() };
+    let winner = if d.winner.is_empty() {
+        "—".to_string()
+    } else {
+        d.winner.clone()
+    };
     format!(
         "🌸 Flower — PF decision\nTopic: {}\nPro: {} · Con: {}\nWinner: {}\nReason: {}",
         d.topic, d.pro_team, d.con_team, winner, d.rfd
@@ -394,13 +416,24 @@ fn DroppedHints(state: RoundState) -> impl IntoView {
         ] {
             for row in rows {
                 let origin = row.cells.first().map(|c| c.text.trim()).unwrap_or("");
-                let origin = if owner == "Pro" { origin } else { row.cells.get(1).map(|c| c.text.trim()).unwrap_or("") };
+                let origin = if owner == "Pro" {
+                    origin
+                } else {
+                    row.cells.get(1).map(|c| c.text.trim()).unwrap_or("")
+                };
                 if origin.is_empty() {
                     continue;
                 }
-                let answered = row.cells.get(answer_col).is_some_and(|c| !c.text.trim().is_empty());
+                let answered = row
+                    .cells
+                    .get(answer_col)
+                    .is_some_and(|c| !c.text.trim().is_empty());
                 if !answered {
-                    let name = if row.title.trim().is_empty() { origin } else { row.title.trim() };
+                    let name = if row.title.trim().is_empty() {
+                        origin
+                    } else {
+                        row.title.trim()
+                    };
                     hints.push(format!("💤 {owner}'s “{name}” got no {answerer} rebuttal answer — if it was extended, it may decide the round."));
                 }
             }

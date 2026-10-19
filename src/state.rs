@@ -26,7 +26,10 @@ impl RowState {
             cells: data
                 .cells
                 .iter()
-                .map(|c| CellState { text: RwSignal::new(c.text.clone()), mark: RwSignal::new(c.mark) })
+                .map(|c| CellState {
+                    text: RwSignal::new(c.text.clone()),
+                    mark: RwSignal::new(c.mark),
+                })
                 .collect(),
         }
     }
@@ -37,7 +40,10 @@ impl RowState {
             cells: self
                 .cells
                 .iter()
-                .map(|c| CellData { text: c.text.get_untracked(), mark: c.mark.get_untracked() })
+                .map(|c| CellData {
+                    text: c.text.get_untracked(),
+                    mark: c.mark.get_untracked(),
+                })
                 .collect(),
         }
     }
@@ -54,10 +60,20 @@ pub struct RoundState {
     pub winner: RwSignal<String>,
     pub rfd: RwSignal<String>,
     pub next_id: RwSignal<u32>,
+    /// True after the last `save` failed (storage full/blocked/unavailable),
+    /// so the UI can stop claiming the round is saved.
+    pub save_failed: RwSignal<bool>,
+    /// Set when the stored round could not be read: explains that the raw
+    /// save was preserved, and blocks `save` from overwriting it until the
+    /// judge dismisses it (or explicitly replaces the round).
+    pub recovery_notice: RwSignal<Option<String>>,
 }
 
 impl RoundState {
     pub fn from_data(data: RoundData) -> Self {
+        // Defence in depth: every entry path (saved, sample, default) gets
+        // the cell-count / id invariants before the UI can index by column.
+        let data = data.normalised();
         Self {
             topic: RwSignal::new(data.topic),
             pro_team: RwSignal::new(data.pro_team),
@@ -68,6 +84,8 @@ impl RoundState {
             winner: RwSignal::new(data.winner),
             rfd: RwSignal::new(data.rfd),
             next_id: RwSignal::new(data.next_id),
+            save_failed: RwSignal::new(false),
+            recovery_notice: RwSignal::new(None),
         }
     }
 
@@ -76,8 +94,18 @@ impl RoundState {
             topic: self.topic.get_untracked(),
             pro_team: self.pro_team.get_untracked(),
             con_team: self.con_team.get_untracked(),
-            pro_rows: self.pro_rows.get_untracked().iter().map(RowState::to_data).collect(),
-            con_rows: self.con_rows.get_untracked().iter().map(RowState::to_data).collect(),
+            pro_rows: self
+                .pro_rows
+                .get_untracked()
+                .iter()
+                .map(RowState::to_data)
+                .collect(),
+            con_rows: self
+                .con_rows
+                .get_untracked()
+                .iter()
+                .map(RowState::to_data)
+                .collect(),
             crossfire_notes: self.crossfire_notes.get_untracked(),
             winner: self.winner.get_untracked(),
             rfd: self.rfd.get_untracked(),
@@ -93,13 +121,17 @@ impl RoundState {
     }
 
     pub fn replace(&self, data: RoundData) {
+        // An explicit replace (example / new round) is the judge choosing to
+        // discard the unreadable save, so it lifts the overwrite block.
+        self.recovery_notice.set(None);
         let fresh = Self::from_data(data);
         self.topic.set(fresh.topic.get_untracked());
         self.pro_team.set(fresh.pro_team.get_untracked());
         self.con_team.set(fresh.con_team.get_untracked());
         self.pro_rows.set(fresh.pro_rows.get_untracked());
         self.con_rows.set(fresh.con_rows.get_untracked());
-        self.crossfire_notes.set(fresh.crossfire_notes.get_untracked());
+        self.crossfire_notes
+            .set(fresh.crossfire_notes.get_untracked());
         self.winner.set(fresh.winner.get_untracked());
         self.rfd.set(fresh.rfd.get_untracked());
         self.next_id.set(fresh.next_id.get_untracked());
@@ -108,7 +140,8 @@ impl RoundState {
     pub fn add_row(&self, side: Side) {
         let id = self.next_id.get_untracked();
         self.next_id.set(id + 1);
-        self.rows(side).update(|rows| rows.push(RowState::from_data(&RowData::new(id, ""))));
+        self.rows(side)
+            .update(|rows| rows.push(RowState::from_data(&RowData::new(id, ""))));
         save(self);
     }
 
@@ -118,22 +151,64 @@ impl RoundState {
     }
 }
 
-pub fn load_initial() -> RoundData {
-    let stored = web_sys::window()
-        .and_then(|w| w.local_storage().ok().flatten())
+/// A round plus, when the stored save could not be read, the notice the UI
+/// must show. In that case `data` is blank but the raw save is preserved
+/// under `STORAGE_BACKUP_KEY` and `save` stays blocked until the judge
+/// dismisses the notice — a blank round never silently overwrites it.
+pub struct LoadedRound {
+    pub data: RoundData,
+    pub recovery_notice: Option<String>,
+}
+
+pub fn load_initial() -> LoadedRound {
+    let storage = web_sys::window().and_then(|w| w.local_storage().ok().flatten());
+    let stored = storage
+        .as_ref()
         .and_then(|s| s.get_item(STORAGE_KEY).ok().flatten());
-    match stored {
-        Some(json) => serde_json::from_str(&json).unwrap_or_default(),
-        None => RoundData::default(),
+    let Some(json) = stored else {
+        return LoadedRound {
+            data: RoundData::default(),
+            recovery_notice: None,
+        };
+    };
+    if let Ok(data) = RoundData::from_saved_json(&json) {
+        LoadedRound {
+            data,
+            recovery_notice: None,
+        }
+    } else {
+        let backed_up = storage
+            .as_ref()
+            .is_some_and(|s| s.set_item(STORAGE_BACKUP_KEY, &json).is_ok());
+        let recovery_notice = if backed_up {
+            "⚠️ We couldn't read the round saved on this device, so we started blank — \
+             but we did NOT overwrite it: a copy of the old save is still kept here. \
+             When you're ready, tap the button below to start fresh and replace it."
+                .to_owned()
+        } else {
+            "⚠️ We couldn't read the round saved on this device, and this browser \
+             wouldn't let us keep a copy of it either. Saving is paused so nothing \
+             is lost silently — tap the button below when you're ready to start fresh."
+                .to_owned()
+        };
+        LoadedRound {
+            data: RoundData::default(),
+            recovery_notice: Some(recovery_notice),
+        }
     }
 }
 
 pub fn save(state: &RoundState) {
-    if let Some(storage) = web_sys::window().and_then(|w| w.local_storage().ok().flatten())
-        && let Ok(json) = serde_json::to_string(&state.snapshot())
-    {
-        let _ = storage.set_item(STORAGE_KEY, &json);
+    // Never overwrite an unreadable save the judge hasn't been told about.
+    if state.recovery_notice.get_untracked().is_some() {
+        return;
     }
+    let storage = web_sys::window().and_then(|w| w.local_storage().ok().flatten());
+    let saved = match (storage, serde_json::to_string(&state.snapshot())) {
+        (Some(storage), Ok(json)) => storage.set_item(STORAGE_KEY, &json).is_ok(),
+        (Some(_), Err(_)) | (None, _) => false,
+    };
+    state.save_failed.set(!saved);
 }
 
 pub fn confirm(message: &str) -> bool {
@@ -155,7 +230,9 @@ pub fn copy_text(text: &str) {
 /// Monotonic clock (ms) for the speech timer deadline. `performance.now()`
 /// keeps ticking in background tabs, unlike a per-tick decrement.
 pub fn now_ms() -> Option<f64> {
-    web_sys::window().and_then(|w| w.performance()).map(|p| p.now())
+    web_sys::window()
+        .and_then(|w| w.performance())
+        .map(|p| p.now())
 }
 
 /// Create/resume an `AudioContext` from a user gesture (timer Start), so

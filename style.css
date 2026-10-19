@@ -56,6 +56,13 @@ button, input, textarea { font: inherit; color: inherit; }
 .card-ico { margin-right: 4px; }
 .card-sub, .saved-note { font-family: "Nunito", sans-serif; font-size: .82rem; color: var(--muted); font-weight: 700; }
 .saved-note { float: right; color: var(--mint-deep); }
+.saved-note-failed { color: var(--error, #b3261e); }
+.save-warning {
+  background: var(--surface); border: 3px solid var(--warning, #e6a817); border-radius: var(--radius);
+  padding: 16px 20px; box-shadow: var(--shadow); display: flex; gap: 14px;
+  align-items: center; flex-wrap: wrap;
+}
+.save-warning p { margin: 0; flex: 1 1 320px; line-height: 1.5; font-weight: 700; }
 .btn {
   border: 2px solid var(--border); background: #fff; border-radius: 999px;
   padding: 8px 16px; font-weight: 800; cursor: pointer; transition: transform .12s, box-shadow .12s, background .12s;
