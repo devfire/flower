@@ -136,7 +136,7 @@ pub fn App() -> impl IntoView {
                     </label>
                 </div>
                 <div class="howto">
-                    <div class="howto-step"><b>"📄 Two pages"</b><span>"Pro arguments live on the pink sheet, Con arguments on the green sheet — never mixed."</span></div>
+                    <div class="howto-step"><b>"📄 Two pages"</b><span>"Pro arguments live on the blue sheet, Con arguments on the green sheet — never mixed."</span></div>
                     <div class="howto-arrow" aria-hidden="true">"➜"</div>
                     <div class="howto-step"><b>"⬇️ Then across"</b><span>"Each new speech gets the next column. Answers go directly right of the argument they answer."</span></div>
                     <div class="howto-arrow" aria-hidden="true">"➜"</div>

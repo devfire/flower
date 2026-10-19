@@ -97,7 +97,7 @@ pub const GUIDE: [GuideStep; 11] = [
         bubble: "Flip to the 🍃 Con sheet — their case gets its own page, just like paper!",
         listen_for: "Con's own contentions. They may also start answering Pro — but their case comes first.",
         do_it: "One row per Con contention on the Con sheet, same as before. Claim + impact, short and sweet.",
-        watch_out: "Keep the sheets separate in your head: pink rows = Pro's case, green rows = Con's case.",
+        watch_out: "Keep the sheets separate in your head: blue rows = Pro's case, green rows = Con's case.",
     },
     GuideStep {
         title: "Crossfire", side: None, minutes: 3, flow_col: None,
