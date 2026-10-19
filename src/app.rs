@@ -475,7 +475,7 @@ pub fn App() -> impl IntoView {
                 <h2><span class="card-ico">"🏆"</span> "4 · Your decision" </h2>
                 <p class="ballot-intro">"No perfect flow required. Ask three questions:"</p>
                 <ol class="ballot-qs">
-                    <li>"Which ⭐ arguments were " <b>"answered the least"</b> " (💤 dropped or weakly answered)?"</li>
+                    <li>"Which arguments were " <b>"answered the least"</b> " (💤 dropped or weakly answered)?"</li>
                     <li>"Which side " <b>"extended"</b> " ➜ their arguments into Summary & Final Focus?"</li>
                     <li>"In Final Focus, who gave the better " <b>"weighing"</b> " ⚖️ — bigger, sooner, or more likely impact?"</li>
                 </ol>
