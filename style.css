@@ -148,7 +148,10 @@ button, input, textarea { font: inherit; color: inherit; }
 .tab-arrow { color: var(--muted); font-weight: 800; }
 .flow-legend { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 14px; font-weight: 700; }
 .legend-chip { background: #f7fbff; border: 2px solid var(--border); border-radius: 999px; padding: 3px 10px; font-size: .8rem; }
-.flow-scroll { overflow-x: auto; border-radius: 16px; padding-bottom: 6px; max-width: 100%; }
+/* Top padding must clear the .fh-badge, which hangs 11px above the active
+   header, plus its translateY(-2px) lift — overflow-x: auto otherwise
+   clips both at the scroll container's top edge. */
+.flow-scroll { overflow-x: auto; border-radius: 16px; padding: 14px 0 6px; max-width: 100%; }
 .flow-grid { display: grid; gap: clamp(6px, .6vw, 10px); width: 100%; min-width: 64rem; }
 .flow-grid > * { min-width: 0; }
 .fh {
