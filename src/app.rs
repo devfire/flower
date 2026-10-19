@@ -404,7 +404,7 @@ fn FlowSheet(
                     </div>
                     {SPEECH_COLS.iter().enumerate().map(|(col, sc)| {
                         let is_now = current_col == Some(col);
-                        let dim = focus_mode.get_untracked() && current_col.is_some() && !is_now;
+                        let dim = move || focus_mode.get() && current_col.is_some() && !is_now;
                         view! {
                             <div class="fh" class:fh-now=is_now class:fh-dim=dim>
                                 {if is_now { Some(view! { <span class="fh-badge">"✏️ you are here"</span> }) } else { None }}
