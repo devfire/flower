@@ -11,6 +11,14 @@ use crate::model::Side;
 /// Each team's prep budget for the whole round, in seconds.
 pub const PREP_SECS: i32 = 3 * 60;
 
+/// Format a countdown as `M:SS`. Negative input (an overrun timer)
+/// displays as `0:00`, never a negative minute.
+#[must_use]
+pub fn fmt_time(secs: i32) -> String {
+    let s = secs.max(0);
+    format!("{}:{:02}", s / 60, s % 60)
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum TimerKind {
     Speech,
@@ -117,6 +125,25 @@ impl TimerBank {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fmt_time_pads_seconds_and_rolls_minutes() {
+        assert_eq!(fmt_time(0), "0:00");
+        assert_eq!(fmt_time(9), "0:09");
+        assert_eq!(fmt_time(59), "0:59");
+        assert_eq!(fmt_time(60), "1:00");
+        assert_eq!(fmt_time(61), "1:01");
+        assert_eq!(fmt_time(240), "4:00");
+        assert_eq!(fmt_time(PREP_SECS), "3:00");
+        assert_eq!(fmt_time(600), "10:00");
+    }
+
+    #[test]
+    fn fmt_time_clamps_overrun_to_zero() {
+        assert_eq!(fmt_time(-1), "0:00");
+        assert_eq!(fmt_time(-90), "0:00");
+        assert_eq!(fmt_time(i32::MIN), "0:00");
+    }
 
     #[test]
     fn used_prep_resumes_remaining_after_a_speech() {

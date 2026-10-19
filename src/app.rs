@@ -1,14 +1,9 @@
 use crate::model::*;
 use crate::shorthand::{InsertCtx, TextTarget, insert_shorthand};
 use crate::state::*;
-use crate::timer::{PREP_SECS, TimerBank, TimerKind};
+use crate::timer::{PREP_SECS, TimerBank, TimerKind, fmt_time};
 use gloo_timers::callback::Interval;
 use leptos::prelude::*;
-
-fn fmt_time(secs: i32) -> String {
-    let s = secs.max(0);
-    format!("{}:{:02}", s / 60, s % 60)
-}
 
 fn placeholder_for(sheet: Side, col: usize) -> &'static str {
     let speech_side = SPEECH_COLS[col].side;
