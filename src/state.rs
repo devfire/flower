@@ -2,8 +2,12 @@
 //! never re-creates DOM nodes or loses the caret. A plain `RoundData`
 //! snapshot is rebuilt (untracked) only when saving / exporting.
 
+use std::cell::{Cell, RefCell};
+
 use crate::model::*;
+use gloo_timers::callback::Timeout;
 use leptos::prelude::*;
+use wasm_bindgen::{closure::Closure, JsCast};
 
 #[derive(Clone, Copy)]
 pub struct CellState {
@@ -198,8 +202,63 @@ pub fn load_initial() -> LoadedRound {
     }
 }
 
+/// Delay between the last edit and the autosave write. Typing during a
+/// speech fires `save` per keystroke; coalescing those calls means the
+/// O(round) snapshot + JSON + `localStorage` write runs at most once per
+/// pause instead of once per character (issue #12).
+const SAVE_DEBOUNCE_MS: u32 = 400;
+
+/// A scheduled-but-not-yet-written save. Dropping the `Timeout` cancels
+/// it, so replacing the pending entry is what resets the debounce clock.
+struct PendingSave {
+    state: RoundState,
+    // Never read: held only so dropping the entry cancels the timer.
+    #[allow(dead_code)]
+    timeout: Timeout,
+}
+
+type FlushListener = Closure<dyn FnMut(web_sys::Event)>;
+
+thread_local! {
+    static PENDING_SAVE: RefCell<Option<PendingSave>> = const { RefCell::new(None) };
+    static FLUSH_HOOKS_INSTALLED: Cell<bool> = const { Cell::new(false) };
+    /// Kept alive for the page's lifetime: dropping a `Closure` removes
+    /// the event listener it backs.
+    static FLUSH_LISTENERS: RefCell<Vec<FlushListener>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Schedule an autosave. Every call site already invokes this after each
+/// mutation; it now only (re)arms a trailing timer — no snapshot, JSON,
+/// or storage work happens per keystroke.
 pub fn save(state: &RoundState) {
     // Never overwrite an unreadable save the judge hasn't been told about.
+    if state.recovery_notice.get_untracked().is_some() {
+        return;
+    }
+    install_flush_hooks();
+    let scheduled = state.clone();
+    let timeout = Timeout::new(SAVE_DEBOUNCE_MS, flush_save);
+    PENDING_SAVE.with(|pending| {
+        *pending.borrow_mut() = Some(PendingSave {
+            state: scheduled,
+            timeout,
+        });
+    });
+}
+
+/// Write any pending autosave now. Called by the debounce timer and when
+/// the page is about to go away (`pagehide`, window `blur`, tab hidden),
+/// so a debounced edit still survives an abrupt tab close.
+pub fn flush_save() {
+    let pending = PENDING_SAVE.with(|pending| pending.borrow_mut().take());
+    if let Some(pending) = pending {
+        write_snapshot(&pending.state);
+    }
+}
+
+fn write_snapshot(state: &RoundState) {
+    // Re-checked at write time: a notice shown after scheduling must
+    // still block the write.
     if state.recovery_notice.get_untracked().is_some() {
         return;
     }
@@ -209,6 +268,49 @@ pub fn save(state: &RoundState) {
         (Some(_), Err(_)) | (None, _) => false,
     };
     state.save_failed.set(!saved);
+}
+
+fn install_flush_hooks() {
+    if FLUSH_HOOKS_INSTALLED.with(Cell::get) {
+        return;
+    }
+    FLUSH_HOOKS_INSTALLED.with(|installed| installed.set(true));
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    add_flush_listener(
+        window.unchecked_ref(),
+        "pagehide",
+        Closure::new(|_: web_sys::Event| flush_save()),
+    );
+    add_flush_listener(
+        window.unchecked_ref(),
+        "blur",
+        Closure::new(|_: web_sys::Event| flush_save()),
+    );
+    if let Some(document) = window.document() {
+        add_flush_listener(
+            document.unchecked_ref(),
+            "visibilitychange",
+            Closure::new(|_: web_sys::Event| {
+                if web_sys::window()
+                    .and_then(|w| w.document())
+                    .is_some_and(|doc| doc.hidden())
+                {
+                    flush_save();
+                }
+            }),
+        );
+    }
+}
+
+fn add_flush_listener(
+    target: &web_sys::EventTarget,
+    name: &str,
+    closure: FlushListener,
+) {
+    let _ = target.add_event_listener_with_callback(name, closure.as_ref().unchecked_ref());
+    FLUSH_LISTENERS.with(|listeners| listeners.borrow_mut().push(closure));
 }
 
 pub fn confirm(message: &str) -> bool {
