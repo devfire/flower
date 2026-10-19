@@ -184,6 +184,30 @@ button, input, textarea { font: inherit; color: inherit; }
 .sheet-con .fr-title input { background: #f2fbf6; }
 .row-del { border: none; background: transparent; color: var(--muted); cursor: pointer; font-weight: 800; padding: 10px 2px; }
 .row-del:hover { color: #b3261e; }
+.row-del-armed { color: #b3261e; }
+/* Anchored bubble: hangs off the ✕ itself instead of a browser dialog
+   appearing at some unrelated corner of the window. */
+.row-del-wrap { position: relative; flex: none; }
+.row-del-pop {
+  position: absolute; right: -6px; top: calc(100% + 7px); z-index: 30;
+  display: flex; flex-direction: column; gap: 7px; width: max-content;
+  background: var(--surface); border: 2px solid #f0b7c3; border-radius: 14px;
+  padding: 9px 10px; box-shadow: var(--shadow);
+  font-size: .82rem; font-weight: 800;
+}
+.row-del-pop::before {
+  content: ""; position: absolute; top: -7px; right: 12px; width: 11px; height: 11px;
+  background: var(--surface); border-left: 2px solid #f0b7c3; border-top: 2px solid #f0b7c3;
+  transform: rotate(45deg);
+}
+.row-del-actions { display: flex; gap: 6px; }
+.row-del-confirm, .row-del-keep {
+  border-radius: 999px; padding: 4px 12px; font-size: .8rem; font-weight: 800; cursor: pointer;
+}
+.row-del-confirm { border: 2px solid #b3261e; background: #fde8e8; color: #8c1d18; }
+.row-del-confirm:hover { background: #b3261e; color: #fff; }
+.row-del-keep { border: 2px solid var(--border); background: #f0f8ff; color: var(--fg); }
+.row-del-keep:hover { background: var(--sky); }
 .cell {
   position: relative; background: #fffdf9; border: 2px solid var(--border);
   border-radius: 14px; padding: 6px; display: flex; flex-direction: column; gap: 5px;

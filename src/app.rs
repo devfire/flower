@@ -625,6 +625,17 @@ fn FlowRow(
     let row_id = row.id;
     let title_target = TextTarget::RowTitle { side, row_id };
     let title_id = insert_ctx.map(|_| title_target.id());
+    // Inline delete confirmation, anchored to the ✕ below: the native
+    // `window.confirm` dialog appears wherever the browser puts it,
+    // far from the row the judge is looking at.
+    let confirming_delete = RwSignal::new(false);
+    let keep_button = NodeRef::<leptos::html::Button>::new();
+    Effect::new(move |_| {
+        let keep = confirming_delete.get().then(|| keep_button.get()).flatten();
+        if let Some(button) = keep {
+            let _ = button.focus();
+        }
+    });
     view! {
         <div class="fr-title">
             <input type="text" id=title_id placeholder="Contention name…" aria-label=format!("{} argument {} title", side.label(), row_index)
@@ -632,10 +643,45 @@ fn FlowRow(
                 prop:value=move || row.title.get()
                 on:input={let s = state.clone(); let r = row.clone(); move |ev| { r.title.set(event_target_value(&ev)); save(&s); }} />
             <div class="title-print" aria-hidden="true">{move || row.title.get()}</div>
-            <button class="row-del no-print" title="Delete this argument row" aria-label=format!("Delete {} argument {} row", side.label(), row_index)
-                on:click={let s = state.clone(); move |_| {
-                    if confirm("Delete this argument row?") { s.remove_row(side, row_id); }
-                }}>"✕"</button>
+            <div class="row-del-wrap no-print"
+                on:keydown=move |ev| {
+                    if ev.key() == "Escape" { confirming_delete.set(false); }
+                }>
+                <button class="row-del" class:row-del-armed=move || confirming_delete.get()
+                    title="Delete this argument row" aria-label=format!("Delete {} argument {} row", side.label(), row_index)
+                    aria-expanded=move || if confirming_delete.get() { "true" } else { "false" }
+                    on:click={let s = state.clone(); let r = row.clone(); move |_| {
+                        // An untouched row holds nothing to lose: skip the
+                        // confirmation entirely instead of nagging.
+                        let is_empty = r.title.get_untracked().trim().is_empty()
+                            && r.cells.iter().all(|c| {
+                                c.text.get_untracked().trim().is_empty()
+                                    && c.mark.get_untracked() == Mark::None
+                            });
+                        if is_empty {
+                            s.remove_row(side, row_id);
+                        } else {
+                            confirming_delete.update(|armed| *armed = !*armed);
+                        }
+                    }}>"✕"</button>
+                {{let state = state.clone(); move || confirming_delete.get().then(|| {
+                    let s = state.clone();
+                    view! {
+                        <div class="row-del-pop" role="alertdialog"
+                            aria-label=format!("Confirm deleting {} argument {}", side.label(), row_index)>
+                            <span class="row-del-q">"Delete this row?"</span>
+                            <span class="row-del-actions">
+                                <button class="row-del-confirm" on:click={let s = s.clone(); move |_| {
+                                    confirming_delete.set(false);
+                                    s.remove_row(side, row_id);
+                                }}>"Delete"</button>
+                                <button class="row-del-keep" node_ref=keep_button
+                                    on:click=move |_| confirming_delete.set(false)>"Keep"</button>
+                            </span>
+                        </div>
+                    }
+                })}}
+            </div>
         </div>
         {row.cells.iter().enumerate().map(|(col, cell)| {
             let cell = *cell;
