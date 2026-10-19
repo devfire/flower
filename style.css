@@ -213,6 +213,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .short-chip:hover { border-color: var(--blue-deep); transform: translateY(-1px); }
 .short-chip b { font-size: 1rem; }
 .shorthand-note { color: var(--muted); font-size: .88rem; line-height: 1.5; }
+.shorthand-hint { background: #fff3f6; border: 2px solid var(--pink, #f2a7bb); border-radius: 14px; padding: 10px 14px; font-weight: 700; line-height: 1.5; }
 .big-notes {
   width: 100%; border: 2px solid var(--border); border-radius: 14px; padding: 12px;
   background: #fffdf9; font-weight: 600; line-height: 1.5; resize: vertical;

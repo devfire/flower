@@ -1,4 +1,5 @@
 use crate::model::*;
+use crate::shorthand::{InsertCtx, TextTarget, insert_shorthand};
 use crate::state::*;
 use crate::timer::{TimerBank, TimerKind, PREP_SECS};
 use gloo_timers::callback::Interval;
@@ -28,7 +29,7 @@ pub fn App() -> impl IntoView {
     let step = RwSignal::new(0usize);
     let tab = RwSignal::new(Side::Pro);
     let focus_mode = RwSignal::new(true);
-    let focused = RwSignal::new(None::<(Side, u32, usize)>);
+    let insert_ctx = InsertCtx::new();
     let initial_secs = (GUIDE[0].minutes * 60).cast_signed();
     let timer_secs = RwSignal::new(initial_secs);
     // Remainders of the timers not on screen: the speech timer plus each
@@ -223,19 +224,22 @@ pub fn App() -> impl IntoView {
                 <div class="setup-grid">
                     <label class="field field-wide">
                         <span>"Resolution / topic"</span>
-                        <input type="text" placeholder="Resolved: …"
+                        <input type="text" id="field-topic" placeholder="Resolved: …"
+                            on:focus=move |_| insert_ctx.focus(TextTarget::Topic)
                             prop:value=move || state.topic.get()
                             on:input={let s = state.clone(); move |ev| { s.topic.set(event_target_value(&ev)); save(&s); }} />
                     </label>
                     <label class="field">
                         <span>"🌸 Pro team"</span>
-                        <input type="text" placeholder="School / speaker names"
+                        <input type="text" id="field-pro-team" placeholder="School / speaker names"
+                            on:focus=move |_| insert_ctx.focus(TextTarget::ProTeam)
                             prop:value=move || state.pro_team.get()
                             on:input={let s = state.clone(); move |ev| { s.pro_team.set(event_target_value(&ev)); save(&s); }} />
                     </label>
                     <label class="field">
                         <span>"🍃 Con team"</span>
-                        <input type="text" placeholder="School / speaker names"
+                        <input type="text" id="field-con-team" placeholder="School / speaker names"
+                            on:focus=move |_| insert_ctx.focus(TextTarget::ConTeam)
                             prop:value=move || state.con_team.get()
                             on:input={let s = state.clone(); move |ev| { s.con_team.set(event_target_value(&ev)); save(&s); }} />
                     </label>
@@ -356,7 +360,7 @@ pub fn App() -> impl IntoView {
 
                 {{let s = st_flow.clone(); move || {
                     let side = tab.get();
-                    view! { <FlowSheet state=s.clone() side=side current_col=current_col() focus_mode=focus_mode focused=focused /> }
+                    view! { <FlowSheet state=s.clone() side=side current_col=current_col() focus_mode=focus_mode insert_ctx=Some(insert_ctx) /> }
                 }}}
 
                 <details class="shorthand no-print">
@@ -367,12 +371,13 @@ pub fn App() -> impl IntoView {
                             let meaning = *meaning;
                             let st = state.clone();
                             view! {
-                                <button class="short-chip" on:click=move |_| insert_shorthand(&st, focused, sym)>
+                                <button class="short-chip" on:click=move |_| insert_shorthand(&st, insert_ctx, sym)>
                                     <b>{sym}</b><span>{meaning}</span>
                                 </button>
                             }
                         }).collect_view()}
                     </div>
+                    {move || insert_ctx.hint.get().map(|hint| view! { <p class="shorthand-hint" role="alert">{hint}</p> })}
                     <p class="shorthand-note">"Also handy: write only author + year for evidence (“Smith '24”), and use debaters' own signpost words — “first”, “next”, “finally” — as row breaks."</p>
                 </details>
             </section>
@@ -380,15 +385,16 @@ pub fn App() -> impl IntoView {
             // Print-only: both sheets, like the two paper pages.
             <section class="card print-only">
                 <h2>"🌸 Pro flow"</h2>
-                <FlowSheet state=st_flow.clone() side=Side::Pro current_col=None focus_mode=focus_mode focused=focused />
+                <FlowSheet state=st_flow.clone() side=Side::Pro current_col=None focus_mode=focus_mode insert_ctx=None />
                 <h2 style="margin-top:20px">"🍃 Con flow"</h2>
-                <FlowSheet state=st_flow.clone() side=Side::Con current_col=None focus_mode=focus_mode focused=focused />
+                <FlowSheet state=st_flow.clone() side=Side::Con current_col=None focus_mode=focus_mode insert_ctx=None />
             </section>
 
             // ---------- Crossfire notes ----------
             <section class="card notes-card">
                 <h2><span class="card-ico">"☕"</span> "Crossfire notes" <span class="card-sub">"optional — only concessions & admissions"</span></h2>
-                <textarea class="big-notes" rows="3" placeholder="e.g. “Pro agreed recycling is only 9% — that helps Con C1…”"
+                <textarea class="big-notes" id="notes-crossfire" rows="3" placeholder="e.g. “Pro agreed recycling is only 9% — that helps Con C1…”"
+                    on:focus=move |_| insert_ctx.focus(TextTarget::CrossfireNotes)
                     prop:value=move || state.crossfire_notes.get()
                     on:input={let s = state.clone(); move |ev| { s.crossfire_notes.set(event_target_value(&ev)); save(&s); }}></textarea>
             </section>
@@ -416,7 +422,8 @@ pub fn App() -> impl IntoView {
                 }}</p>
                 <label class="field">
                     <span>"Reason for decision (say it in plain words — debaters learn from this!) 🗣️"</span>
-                    <textarea class="big-notes" rows="4"
+                    <textarea class="big-notes" id="notes-rfd" rows="4"
+                        on:focus=move |_| insert_ctx.focus(TextTarget::Rfd)
                         placeholder="“I voted ___ because the ___ argument was dropped / extended / weighed better when…”"
                         prop:value=move || state.rfd.get()
                         on:input={let s = state.clone(); move |ev| { s.rfd.set(event_target_value(&ev)); save(&s); }}></textarea>
@@ -433,24 +440,6 @@ pub fn App() -> impl IntoView {
                 <p class="footer-small">"Your flow auto-saves only in this browser (localStorage) — nothing leaves your device."</p>
             </footer>
         </div>
-    }
-}
-
-fn insert_shorthand(state: &RoundState, focused: RwSignal<Option<(Side, u32, usize)>>, sym: &str) {
-    if let Some((side, row_id, col)) = focused.get_untracked() {
-        for row in state.rows(side).get_untracked().iter() {
-            if row.id == row_id
-                && let Some(cell) = row.cells.get(col)
-            {
-                cell.text.update(|t| {
-                    if !t.is_empty() && !t.ends_with([' ', '\n']) {
-                        t.push(' ');
-                    }
-                    t.push_str(sym);
-                });
-            }
-        }
-        save(state);
     }
 }
 
@@ -520,7 +509,7 @@ fn FlowSheet(
     side: Side,
     current_col: Option<usize>,
     focus_mode: RwSignal<bool>,
-    focused: RwSignal<Option<(Side, u32, usize)>>,
+    insert_ctx: Option<InsertCtx>,
 ) -> impl IntoView {
     let rows = state.rows(side);
     let sheet_class = match side {
@@ -551,7 +540,7 @@ fn FlowSheet(
                         each=move || rows.get()
                         key=|row: &RowState| row.id
                         children={let s = state.clone(); move |row: RowState| {
-                            view! { <FlowRow state=s.clone() side=side row=row current_col=current_col focus_mode=focus_mode focused=focused /> }
+                            view! { <FlowRow state=s.clone() side=side row=row current_col=current_col focus_mode=focus_mode insert_ctx=insert_ctx /> }
                         }}
                     />
                 </div>
@@ -576,12 +565,15 @@ fn FlowRow(
     row: RowState,
     current_col: Option<usize>,
     focus_mode: RwSignal<bool>,
-    focused: RwSignal<Option<(Side, u32, usize)>>,
+    insert_ctx: Option<InsertCtx>,
 ) -> impl IntoView {
     let row_id = row.id;
+    let title_target = TextTarget::RowTitle { side, row_id };
+    let title_id = insert_ctx.map(|_| title_target.id());
     view! {
         <div class="fr-title">
-            <input type="text" placeholder="Contention name…"
+            <input type="text" id=title_id placeholder="Contention name…"
+                on:focus=move |_| if let Some(ctx) = insert_ctx { ctx.focus(title_target) }
                 prop:value=move || row.title.get()
                 on:input={let s = state.clone(); let r = row.clone(); move |ev| { r.title.set(event_target_value(&ev)); save(&s); }} />
             <button class="row-del no-print" title="Delete this argument row"
@@ -594,6 +586,8 @@ fn FlowRow(
             let is_now = current_col == Some(col);
             let dim = move || focus_mode.get() && current_col.is_some() && !is_now;
             let placeholder = placeholder_for(side, col);
+            let cell_target = TextTarget::FlowCell { side, row_id, col };
+            let cell_id = insert_ctx.map(|_| cell_target.id());
             view! {
                 <div class="cell" class:cell-now=is_now class:cell-dim=dim
                     class:cell-dropped=move || cell.mark.get() == Mark::Dropped
@@ -602,10 +596,10 @@ fn FlowRow(
                     {if col > 0 {
                         Some(view! { <span class="cell-arrow" aria-hidden="true">"➜"</span> })
                     } else { None }}
-                    <textarea rows="3" placeholder=placeholder
+                    <textarea rows="3" id=cell_id placeholder=placeholder
                         prop:value=move || cell.text.get()
                         on:input={let s = state.clone(); move |ev| { cell.text.set(event_target_value(&ev)); save(&s); }}
-                        on:focus=move |_| focused.set(Some((side, row_id, col)))></textarea>
+                        on:focus=move |_| if let Some(ctx) = insert_ctx { ctx.focus(cell_target) }></textarea>
                     <div class="cell-marks no-print">
                         {[(Mark::Dropped, "💤 dropped"), (Mark::Extended, "➜ extended"), (Mark::Key, "⭐ key")].into_iter().map(|(mark, label)| {
                             view! {
