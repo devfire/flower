@@ -28,11 +28,26 @@ pub fn App() -> impl IntoView {
     let focused = RwSignal::new(None::<(Side, u32, usize)>);
     let timer_secs = RwSignal::new((GUIDE[0].minutes * 60) as i32);
     let timer_label = RwSignal::new(GUIDE[0].title.to_string());
+    let timer_announcement = RwSignal::new(String::new());
     let running = RwSignal::new(false);
     let interval = StoredValue::new_local(None::<Interval>);
+    // Wall-clock deadline (performance.now ms) the running timer counts to.
+    // Remaining time is derived from it on every tick, so background-tab
+    // throttling cannot make the timer run slow.
+    let deadline = StoredValue::new_local(None::<f64>);
+    let audio_ctx = StoredValue::new_local(None::<web_sys::AudioContext>);
 
     let stop_timer = move || {
+        // Freeze the displayed remainder before dropping the deadline, so
+        // pausing between ticks does not lose (or gain) a second.
+        if let (Some(end), Some(now)) = (deadline.get_value(), now_ms())
+            && running.get_untracked()
+        {
+            timer_secs.set(((end - now) / 1_000.0).ceil().max(0.0) as i32);
+        }
         running.set(false);
+        deadline.set_value(None);
+        // Dropping the Interval cancels it: no callbacks fire afterwards.
         interval.set_value(None);
     };
     let set_step = move |next: usize| {
@@ -41,6 +56,7 @@ pub fn App() -> impl IntoView {
         stop_timer();
         timer_secs.set((GUIDE[next].minutes * 60) as i32);
         timer_label.set(GUIDE[next].title.to_string());
+        timer_announcement.set(String::new());
         // Rebuttals answer the opponent's case, so they are written on the
         // opponent's sheet; every other speech writes on the speaker's sheet.
         let sheet = match GUIDE[next].flow_col {
@@ -55,15 +71,32 @@ pub fn App() -> impl IntoView {
     let toggle_timer = move |_| {
         if running.get_untracked() {
             stop_timer();
-        } else {
+        } else if timer_secs.get_untracked() > 0 {
+            let Some(now) = now_ms() else { return };
+            deadline.set_value(Some(now + f64::from(timer_secs.get_untracked()) * 1_000.0));
+            timer_announcement.set(String::new());
+            if audio_ctx.get_value().is_none() {
+                audio_ctx.set_value(unlock_audio());
+            }
             running.set(true);
-            interval.set_value(Some(Interval::new(1_000, move || {
-                timer_secs.update(|s| {
-                    *s = (*s - 1).max(0);
-                    if *s == 0 {
-                        running.set(false);
-                    }
-                });
+            interval.set_value(Some(Interval::new(250, move || {
+                let (Some(end), Some(now)) = (deadline.get_value(), now_ms()) else {
+                    return;
+                };
+                let remaining_ms = end - now;
+                if remaining_ms <= 0.0 {
+                    timer_secs.set(0);
+                    running.set(false);
+                    deadline.set_value(None);
+                    interval.set_value(None);
+                    timer_announcement.set(format!(
+                        "Time! {} has finished.",
+                        timer_label.get_untracked()
+                    ));
+                    timer_expired_feedback(audio_ctx.get_value().as_ref());
+                } else {
+                    timer_secs.set((remaining_ms / 1_000.0).ceil() as i32);
+                }
             })));
         }
     };
@@ -71,6 +104,7 @@ pub fn App() -> impl IntoView {
         stop_timer();
         timer_secs.set(3 * 60);
         timer_label.set(format!("{} prep time ⏱️", side.label()));
+        timer_announcement.set(String::new());
     };
 
     let st_flow = state.clone();
@@ -188,11 +222,14 @@ pub fn App() -> impl IntoView {
                         <div class="timer-digits" class:timer-done=move || timer_secs.get() == 0>
                             {move || fmt_time(timer_secs.get())}
                         </div>
+                        <div class="sr-only" role="status" aria-live="polite">
+                            {move || timer_announcement.get()}
+                        </div>
                         <div class="timer-btns">
                             <button class="btn btn-main" on:click=toggle_timer>
                                 {move || if running.get() { "⏸ Pause" } else { "▶ Start" }}
                             </button>
-                            <button class="btn btn-soft" on:click=move |_| { stop_timer(); timer_secs.set((GUIDE[step.get_untracked()].minutes * 60) as i32); timer_label.set(GUIDE[step.get_untracked()].title.to_string()); }>
+                            <button class="btn btn-soft" on:click=move |_| { stop_timer(); timer_secs.set((GUIDE[step.get_untracked()].minutes * 60) as i32); timer_label.set(GUIDE[step.get_untracked()].title.to_string()); timer_announcement.set(String::new()); }>
                                 "↺ Reset"
                             </button>
                         </div>

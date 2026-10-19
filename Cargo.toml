@@ -14,6 +14,14 @@ web-sys = { version = "0.3", features = [
     "Storage",
     "Navigator",
     "Clipboard",
+    "Performance",
+    "AudioContext",
+    "AudioDestinationNode",
+    "AudioNode",
+    "AudioParam",
+    "GainNode",
+    "OscillatorNode",
+    "OscillatorType",
 ] }
 
 [profile.release]
