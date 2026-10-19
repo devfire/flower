@@ -222,6 +222,7 @@ pub fn App() -> impl IntoView {
                 }
             })}
 
+            <main>
             // ---------- Round setup ----------
             <section class="card setup-card">
                 <h2><span class="card-ico">"🎀"</span> "1 · Set up the round" <span class="saved-note" class:saved-note-failed=move || st_saved.save_failed.get()>{move || if st_saved.save_failed.get() { "⚠️ Not saved — this browser is blocking or out of storage; copy anything important before closing" } else { "✓ auto-saves on this device" }}</span></h2>
@@ -270,7 +271,7 @@ pub fn App() -> impl IntoView {
                         view! {
                             <span class="step-wrap">
                                 {if i > 0 { Some(view! { <span class="step-arrow" aria-hidden="true">"➜"</span> }) } else { None }}
-                                <button class=cls on:click=move |_| set_step(i)>
+                                <button class=cls aria-current=move || (step.get() == i).then_some("step") on:click=move |_| set_step(i)>
                                     {if i < step.get_untracked() { "✓ " } else { "" }}
                                     {g.title}
                                 </button>
@@ -298,7 +299,7 @@ pub fn App() -> impl IntoView {
 
                     <div class="timer-box">
                         <div class="timer-label">{move || timer_label.get()}</div>
-                        <div class="timer-digits" class:timer-done=move || timer_secs.get() == 0>
+                        <div class="timer-digits" role="timer" aria-label=move || format!("{}: {} remaining", timer_label.get(), fmt_time(timer_secs.get())) class:timer-done=move || timer_secs.get() == 0>
                             {move || fmt_time(timer_secs.get())}
                         </div>
                         <div class="sr-only" role="status" aria-live="polite">
@@ -344,13 +345,15 @@ pub fn App() -> impl IntoView {
             // ---------- Flow sheets ----------
             <section class="card flow-card">
                 <h2><span class="card-ico">"🌷"</span> "3 · Your flow" </h2>
-                <div class="tabs no-print" role="tablist">
+                <div class="tabs no-print">
                     <button class="tab tab-pro" class:tab-on=move || tab.get() == Side::Pro
+                        aria-pressed=move || if tab.get() == Side::Pro { "true" } else { "false" }
                         on:click=move |_| tab.set(Side::Pro)>
                         "🌸 Pro sheet" <span class="tab-hint">"their arguments ↓, round →"</span>
                     </button>
                     <span class="tab-arrow" aria-hidden="true">"⇄"</span>
                     <button class="tab tab-con" class:tab-on=move || tab.get() == Side::Con
+                        aria-pressed=move || if tab.get() == Side::Con { "true" } else { "false" }
                         on:click=move |_| tab.set(Side::Con)>
                         "🍃 Con sheet" <span class="tab-hint">"their arguments ↓, round →"</span>
                     </button>
@@ -397,7 +400,7 @@ pub fn App() -> impl IntoView {
             // ---------- Crossfire notes ----------
             <section class="card notes-card">
                 <h2><span class="card-ico">"☕"</span> "Crossfire notes" <span class="card-sub">"optional — only concessions & admissions"</span></h2>
-                <textarea class="big-notes" id="notes-crossfire" rows="3" placeholder="e.g. “Pro agreed recycling is only 9% — that helps Con C1…”"
+                <textarea class="big-notes" id="notes-crossfire" rows="3" aria-label="Crossfire notes" placeholder="e.g. “Pro agreed recycling is only 9% — that helps Con C1…”"
                     on:focus=move |_| insert_ctx.focus(TextTarget::CrossfireNotes)
                     prop:value=move || state.crossfire_notes.get()
                     on:input={let s = state.clone(); move |ev| { s.crossfire_notes.set(event_target_value(&ev)); save(&s); }}></textarea>
@@ -416,9 +419,9 @@ pub fn App() -> impl IntoView {
                 <DroppedHints state=state.clone() step=step />
                 <div class="winner-row no-print">
                     <span>"I vote for:"</span>
-                    <button class="btn winner-btn btn-pro" class:winner-on=move || state.winner.get() == "Pro"
+                    <button class="btn winner-btn btn-pro" class:winner-on=move || state.winner.get() == "Pro" aria-pressed=move || if state.winner.get() == "Pro" { "true" } else { "false" }
                         on:click={let s = state.clone(); move |_| { s.winner.set("Pro".to_string()); save(&s); }}>"🌸 Pro"</button>
-                    <button class="btn winner-btn btn-con" class:winner-on=move || state.winner.get() == "Con"
+                    <button class="btn winner-btn btn-con" class:winner-on=move || state.winner.get() == "Con" aria-pressed=move || if state.winner.get() == "Con" { "true" } else { "false" }
                         on:click={let s = state.clone(); move |_| { s.winner.set("Con".to_string()); save(&s); }}>"🍃 Con"</button>
                 </div>
                 <p class="winner-print">{move || {
@@ -427,7 +430,7 @@ pub fn App() -> impl IntoView {
                 }}</p>
                 <label class="field">
                     <span>"Reason for decision (say it in plain words — debaters learn from this!) 🗣️"</span>
-                    <textarea class="big-notes" id="notes-rfd" rows="4"
+                    <textarea class="big-notes" id="notes-rfd" rows="4" aria-label="Reason for decision"
                         on:focus=move |_| insert_ctx.focus(TextTarget::Rfd)
                         placeholder="“I voted ___ because the ___ argument was dropped / extended / weighed better when…”"
                         prop:value=move || state.rfd.get()
@@ -439,6 +442,8 @@ pub fn App() -> impl IntoView {
                     <button class="btn btn-soft" on:click=move |_| print_page()>"🖨️ Print flow + ballot"</button>
                 </div>
             </section>
+
+            </main>
 
             <footer class="footer">
                 <p>"Made with 🌸 for lay judges — based on the NSDA “Intro to Flowing” judge training. "
@@ -526,13 +531,9 @@ fn FlowSheet(
                         }
                     }).collect_view()}
 
-                    <For
-                        each=move || rows.get()
-                        key=|row: &RowState| row.id
-                        children={let s = state.clone(); move |row: RowState| {
-                            view! { <FlowRow state=s.clone() side=side row=row current_col=current_col focus_mode=focus_mode insert_ctx=insert_ctx /> }
-                        }}
-                    />
+                    {let s = state.clone(); move || rows.get().into_iter().enumerate().map(|(idx, row)| {
+                        view! { <FlowRow state=s.clone() side=side row=row row_index=idx + 1 current_col=current_col focus_mode=focus_mode insert_ctx=insert_ctx /> }
+                    }).collect_view()}
                 </div>
             </div>
             <button class="btn btn-main add-row no-print" on:click={let s = state.clone(); move |_| s.add_row(side)}>
@@ -553,6 +554,7 @@ fn FlowRow(
     state: RoundState,
     side: Side,
     row: RowState,
+    row_index: usize,
     current_col: Option<usize>,
     focus_mode: RwSignal<bool>,
     insert_ctx: Option<InsertCtx>,
@@ -562,12 +564,12 @@ fn FlowRow(
     let title_id = insert_ctx.map(|_| title_target.id());
     view! {
         <div class="fr-title">
-            <input type="text" id=title_id placeholder="Contention name…"
+            <input type="text" id=title_id placeholder="Contention name…" aria-label=format!("{} argument {} title", side.label(), row_index)
                 on:focus=move |_| if let Some(ctx) = insert_ctx { ctx.focus(title_target) }
                 prop:value=move || row.title.get()
                 on:input={let s = state.clone(); let r = row.clone(); move |ev| { r.title.set(event_target_value(&ev)); save(&s); }} />
             <div class="title-print" aria-hidden="true">{move || row.title.get()}</div>
-            <button class="row-del no-print" title="Delete this argument row"
+            <button class="row-del no-print" title="Delete this argument row" aria-label=format!("Delete {} argument {} row", side.label(), row_index)
                 on:click={let s = state.clone(); move |_| {
                     if confirm("Delete this argument row?") { s.remove_row(side, row_id); }
                 }}>"✕"</button>
@@ -577,6 +579,7 @@ fn FlowRow(
             let is_now = current_col == Some(col);
             let dim = move || focus_mode.get() && current_col.is_some() && !is_now;
             let placeholder = placeholder_for(side, col);
+            let title_signal = row.title;
             let cell_target = TextTarget::FlowCell { side, row_id, col };
             let cell_id = insert_ctx.map(|_| cell_target.id());
             view! {
@@ -587,7 +590,7 @@ fn FlowRow(
                     {if col > 0 {
                         Some(view! { <span class="cell-arrow" aria-hidden="true">"➜"</span> })
                     } else { None }}
-                    <textarea rows="3" id=cell_id placeholder=placeholder
+                    <textarea rows="3" id=cell_id placeholder=placeholder aria-label=move || { let title = title_signal.get(); let title = title.trim(); if title.is_empty() { format!("{}, {} argument {}", SPEECH_COLS[col].full, side.label(), row_index) } else { format!("{}, {} argument {}: {}", SPEECH_COLS[col].full, side.label(), row_index, title) } }
                         prop:value=move || cell.text.get()
                         on:input={let s = state.clone(); move |ev| { cell.text.set(event_target_value(&ev)); save(&s); }}
                         on:focus=move |_| if let Some(ctx) = insert_ctx { ctx.focus(cell_target) }></textarea>
@@ -597,6 +600,7 @@ fn FlowRow(
                             view! {
                                 <button class="mark-btn"
                                     class:mark-on=move || cell.mark.get() == mark
+                                    aria-pressed=move || if cell.mark.get() == mark { "true" } else { "false" }
                                     on:click={let s = state.clone(); move |_| {
                                         cell.mark.update(|m| *m = if *m == mark { Mark::None } else { mark });
                                         save(&s);

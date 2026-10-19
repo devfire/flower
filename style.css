@@ -7,7 +7,10 @@
   --bg: #eff7fd;
   --surface: #ffffff;
   --fg: #3f4f66;
-  --muted: #7c90a8;
+  /* Dark enough for >=4.5:1 on every pastel surface it sits on (worst
+     case: --blue tab background, 5.0:1) — pastel backgrounds, not
+     pastel text (issue #9). */
+  --muted: #3f5a75;
   --border: #cfe3f3;
   --blue: #b9ddf7;
   --blue-deep: #5ea3d8;
@@ -48,7 +51,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .hero-mascot { font-size: 56px; animation: bob 3s ease-in-out infinite; }
 @keyframes bob { 0%,100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-7px) rotate(4deg); } }
 .hero-text { flex: 1 1 320px; }
-.hero-text h1 { margin: 0; font-size: clamp(1.7rem, 1.2rem + 1.6vw, 2.9rem); font-weight: 700; color: #2f7fb8; }
+.hero-text h1 { margin: 0; font-size: clamp(1.7rem, 1.2rem + 1.6vw, 2.9rem); font-weight: 700; color: #256a99; }
 .hero-sub { font-size: 1.05rem; color: var(--muted); font-weight: 600; }
 .hero-tag { margin: 6px 0 0; font-size: 1.02rem; line-height: 1.5; }
 .hero-actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -61,7 +64,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .card h2 { margin: 0 0 14px; font-size: 1.35rem; font-weight: 600; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
 .card-ico { margin-right: 4px; }
 .card-sub, .saved-note { font-family: "Nunito", sans-serif; font-size: .82rem; color: var(--muted); font-weight: 700; }
-.saved-note { margin-left: auto; color: var(--mint-deep); }
+.saved-note { margin-left: auto; color: #17693f; }
 .saved-note-failed { color: var(--error, #b3261e); }
 .save-warning {
   background: var(--surface); border: 3px solid var(--warning, #e6a817); border-radius: var(--radius);
@@ -109,7 +112,7 @@ button, input, textarea { font: inherit; color: inherit; }
 }
 .step-chip:hover { border-color: var(--blue-deep); }
 .step-chip.is-done { background: var(--mint); border-color: var(--mint-deep); color: #14532d; }
-.step-chip.is-now { background: linear-gradient(135deg, var(--blue-deep), #a8d4f5); color: #fff; border-color: #2f7fb8; transform: scale(1.06); box-shadow: 0 4px 12px rgba(47,127,184,.35); }
+.step-chip.is-now { background: linear-gradient(135deg, #1f5c86, #256a99); color: #fff; border-color: #1f5c86; transform: scale(1.06); box-shadow: 0 4px 12px rgba(47,127,184,.35); }
 .guide-body { display: grid; grid-template-columns: minmax(0, 1fr) clamp(250px, 22vw, 380px); gap: clamp(12px, 1.4vw, 24px); }
 .guide-body > * { min-width: 0; }
 .bubble-wrap { display: flex; gap: 12px; align-items: flex-start; }
@@ -130,9 +133,9 @@ button, input, textarea { font: inherit; color: inherit; }
   background: linear-gradient(160deg, var(--cream), #fff8e1); border: 3px solid #f2df8e;
   border-radius: 22px; padding: 16px; text-align: center; display: flex; flex-direction: column; gap: 9px;
 }
-.timer-label { font-weight: 800; color: #8a6d1a; }
+.timer-label { font-weight: 800; color: #6b5410; }
 .timer-digits { font-size: clamp(2.2rem, 1.6rem + 1.4vw, 3.4rem); font-weight: 700; line-height: 1; color: #6b5410; }
-.timer-digits.timer-done { color: #d94f4f; animation: bob 1s ease-in-out infinite; }
+.timer-digits.timer-done { color: #b3261e; animation: bob 1s ease-in-out infinite; }
 .timer-btns, .prep-row, .step-nav { display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; }
 .prep-row { font-size: .85rem; font-weight: 800; color: var(--muted); border-top: 2px dashed #f2df8e; padding-top: 9px; }
 .focus-toggle { display: flex; gap: 10px; align-items: flex-start; margin-top: 16px; background: #eef6ff; border: 2px solid var(--lav); border-radius: 14px; padding: 12px 14px; cursor: pointer; line-height: 1.45; }
@@ -165,9 +168,12 @@ button, input, textarea { font: inherit; color: inherit; }
 .sheet-con .fh { background: #dff7ea; }
 .fh-sub { font-size: .7rem; color: var(--muted); font-weight: 700; }
 .fh-now { outline: 3px solid var(--blue-deep); outline-offset: 1px; transform: translateY(-2px); }
-.fh-dim, .cell-dim { opacity: .38; filter: saturate(.5); }
+/* Focus-mode dimming must not fade text (opacity .38 failed contrast,
+   issue #9): desaturate + cool the background instead, text stays full-strength. */
+.fh-dim, .cell-dim { filter: saturate(.45); }
+.cell-dim { background: #e9eff5; }
 .fh-badge {
-  position: absolute; top: -11px; right: 6px; background: #2f7fb8; color: #fff;
+  position: absolute; top: -11px; right: 6px; background: #256a99; color: #fff;
   font-size: .62rem; padding: 2px 8px; border-radius: 999px; letter-spacing: .02em;
 }
 .fr-title { display: flex; gap: 6px; align-items: flex-start; }
@@ -175,7 +181,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .sheet-pro .fr-title input { background: #edf6fd; }
 .sheet-con .fr-title input { background: #f2fbf6; }
 .row-del { border: none; background: transparent; color: var(--muted); cursor: pointer; font-weight: 800; padding: 10px 2px; }
-.row-del:hover { color: #d94f4f; }
+.row-del:hover { color: #b3261e; }
 .cell {
   position: relative; background: #fffdf9; border: 2px solid var(--border);
   border-radius: 14px; padding: 6px; display: flex; flex-direction: column; gap: 5px;
@@ -231,8 +237,10 @@ button, input, textarea { font: inherit; color: inherit; }
 .dropped-box ul { margin: 0; padding-left: 18px; }
 .dropped-none { background: #f2fbf6; border: 2px solid var(--mint); border-radius: 16px; padding: 12px 16px; font-weight: 700; margin: 0 0 16px; }
 .winner-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; font-weight: 800; }
-.winner-btn { font-size: 1.05rem; padding: 10px 22px; opacity: .55; }
-.winner-btn.winner-on { opacity: 1; transform: scale(1.05); outline: 3px solid var(--fg); }
+/* Unselected winner stays readable (no opacity fade, issue #9):
+   desaturated until chosen, then full colour + outline. */
+.winner-btn { font-size: 1.05rem; padding: 10px 22px; filter: saturate(.45); }
+.winner-btn.winner-on { filter: none; transform: scale(1.05); outline: 3px solid var(--fg); }
 .winner-print { display: none; font-family: "Fredoka", sans-serif; font-size: 1.2rem; }
 .ballot-actions { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
 .footer { text-align: center; color: var(--muted); line-height: 1.6; padding: 0 12px; font-weight: 600; }
