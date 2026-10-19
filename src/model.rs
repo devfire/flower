@@ -218,6 +218,26 @@ impl Default for RoundData {
 }
 
 impl RoundData {
+    /// True when nothing a judge typed or marked would be lost by replacing
+    /// this round (whitespace alone does not count).
+    pub fn is_empty(&self) -> bool {
+        let blank = |s: &str| s.trim().is_empty();
+        let row_blank = |r: &RowData| {
+            blank(&r.title)
+                && r.cells
+                    .iter()
+                    .all(|c| blank(&c.text) && c.mark == Mark::None)
+        };
+        blank(&self.topic)
+            && blank(&self.pro_team)
+            && blank(&self.con_team)
+            && blank(&self.crossfire_notes)
+            && blank(&self.winner)
+            && blank(&self.rfd)
+            && self.pro_rows.iter().all(row_blank)
+            && self.con_rows.iter().all(row_blank)
+    }
+
     pub fn sample() -> Self {
         let mut r = Self {
             topic: "Resolved: The United States should ban single-use plastics.".to_owned(),
@@ -267,3 +287,44 @@ pub const SHORTHAND: [(&str, &str); 16] = [
 ];
 
 pub const STORAGE_KEY: &str = "flower-round-v1";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_round_is_empty_and_sample_is_not() {
+        assert!(RoundData::default().is_empty());
+        assert!(!RoundData::sample().is_empty());
+    }
+
+    #[test]
+    fn whitespace_alone_is_empty_but_any_content_is_not() {
+        let mut round = RoundData {
+            topic: "  \n ".to_owned(),
+            ..RoundData::default()
+        };
+        round.pro_rows[0].cells[0].text = " ".to_owned();
+        assert!(round.is_empty());
+
+        round.con_rows[0].cells[1].text = "note".to_owned();
+        assert!(!round.is_empty());
+    }
+
+    #[test]
+    fn marks_titles_and_notes_count_as_content() {
+        let mut by_mark = RoundData::default();
+        by_mark.pro_rows[0].cells[0].mark = Mark::Dropped;
+        assert!(!by_mark.is_empty());
+
+        let mut by_title = RoundData::default();
+        by_title.con_rows[0].title = "C1".to_owned();
+        assert!(!by_title.is_empty());
+
+        let by_rfd = RoundData {
+            rfd: "Pro wins on weighing".to_owned(),
+            ..RoundData::default()
+        };
+        assert!(!by_rfd.is_empty());
+    }
+}

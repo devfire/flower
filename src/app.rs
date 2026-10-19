@@ -91,7 +91,14 @@ pub fn App() -> impl IntoView {
                     </p>
                 </div>
                 <div class="hero-actions no-print">
-                    <button class="btn btn-soft" on:click=move |_| { st_sample.replace(RoundData::sample()); save(&st_sample); }>
+                    <button class="btn btn-soft" on:click=move |_| {
+                        if st_sample.snapshot().is_empty()
+                            || confirm("Load the example round? This replaces the current flow.")
+                        {
+                            st_sample.replace(RoundData::sample());
+                            save(&st_sample);
+                        }
+                    }>
                         "🧸 See an example round"
                     </button>
                     <button class="btn btn-soft" on:click=move |_| {
