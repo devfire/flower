@@ -94,6 +94,8 @@ button, input, textarea { font: inherit; color: inherit; }
 .field input:focus, .field textarea:focus, .fr-title input:focus, .cell textarea:focus {
   outline: 3px solid var(--sky); border-color: var(--blue-deep);
 }
+.topic-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: -4px; }
+.topic-note { font-family: "Nunito", sans-serif; font-size: .82rem; color: var(--muted); font-weight: 700; margin: 0; }
 .howto { display: flex; align-items: stretch; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
 .howto-step {
   flex: 1 1 200px; display: flex; flex-direction: column; gap: 4px;

@@ -2,8 +2,10 @@ use crate::model::*;
 use crate::shorthand::{InsertCtx, TextTarget, insert_shorthand};
 use crate::state::*;
 use crate::timer::{PREP_SECS, TimerBank, TimerKind, fmt_time};
+use crate::topic::{self, TopicAction};
 use gloo_timers::callback::Interval;
 use leptos::prelude::*;
+use leptos::task::spawn_local;
 
 fn placeholder_for(sheet: Side, col: usize) -> &'static str {
     let speech_side = SPEECH_COLS[col].side;
@@ -18,9 +20,42 @@ fn placeholder_for(sheet: Side, col: usize) -> &'static str {
 
 #[component]
 pub fn App() -> impl IntoView {
-    let loaded = load_initial();
+    // Issue #13: pre-fill an empty topic field with the bundled NSDA
+    // resolution. A saved topic is never touched here (non-empty text
+    // passes through), and with an unreadable save the in-memory fill
+    // cannot overwrite anything: `save` stays blocked until the judge
+    // dismisses the recovery notice below.
+    let bundled_topic = topic::bundled();
+    let mut loaded = load_initial();
+    if loaded.data.topic.trim().is_empty() {
+        loaded.data.topic.clone_from(&bundled_topic.resolution);
+    }
     let state = RoundState::from_data(loaded.data);
     state.recovery_notice.set(loaded.recovery_notice);
+    // The NSDA topic currently on offer: starts as the bundled fallback
+    // (so provenance works offline), replaced by the same-origin
+    // `topics.json` the deploy build extracted when that fetch succeeds.
+    let nsda_topic = RwSignal::new(bundled_topic.clone());
+    {
+        let state_for_fetch = state.clone();
+        let auto_filled = bundled_topic.resolution.clone();
+        spawn_local(async move {
+            if let Some(fetched) = topic::fetch_current().await {
+                if topic::decide(
+                    &state_for_fetch.topic.get_untracked(),
+                    &auto_filled,
+                    &fetched,
+                ) == TopicAction::Prefill
+                {
+                    state_for_fetch.topic.set(fetched.resolution.clone());
+                    save(&state_for_fetch);
+                }
+                // Offer / UpToDate: leave the field exactly as it is;
+                // the provenance row below offers the new wording.
+                nsda_topic.set(fetched);
+            }
+        });
+    }
     let step = RwSignal::new(0usize);
     let tab = RwSignal::new(Side::Pro);
     let focus_mode = RwSignal::new(true);
@@ -172,6 +207,7 @@ pub fn App() -> impl IntoView {
     let st_sample = state.clone();
     let st_clear = state.clone();
     let st_export = state.clone();
+    let st_topic = state.clone();
     let current_col = move || GUIDE[step.get()].flow_col;
 
     view! {
@@ -199,6 +235,9 @@ pub fn App() -> impl IntoView {
                     <button class="btn btn-soft" on:click=move |_| {
                         if confirm("Start a brand-new round? This clears the current flow.") {
                             st_clear.replace(RoundData::default());
+                            // A brand-new round starts empty, so it gets
+                            // the current NSDA pre-fill like a fresh visit.
+                            st_clear.topic.set(nsda_topic.get_untracked().resolution);
                             save(&st_clear);
                             set_step_impl(0, false);
                             // A brand-new round is the other explicit prep
@@ -234,6 +273,30 @@ pub fn App() -> impl IntoView {
                             prop:value=move || state.topic.get()
                             on:input={let s = state.clone(); move |ev| { s.topic.set(event_target_value(&ev)); save(&s); }} />
                     </label>
+                    <div class="field-wide topic-row">
+                        {move || {
+                            let nsda = nsda_topic.get();
+                            let current = st_topic.topic.get();
+                            let offered = !current.trim().is_empty()
+                                && current.trim() != nsda.resolution.trim();
+                            let note = format!("\u{1f338} {}", nsda.provenance());
+                            if offered {
+                                let s = st_topic.clone();
+                                let resolution = nsda.resolution.clone();
+                                view! {
+                                    <>
+                                        <p class="topic-note">{note}</p>
+                                        <button class="btn btn-soft btn-chip" on:click=move |_| {
+                                            s.topic.set(resolution.clone());
+                                            save(&s);
+                                        }>"Use current NSDA resolution"</button>
+                                    </>
+                                }.into_any()
+                            } else {
+                                view! { <p class="topic-note">{note}</p> }.into_any()
+                            }
+                        }}
+                    </div>
                     <label class="field">
                         <span>"🌸 Pro team"</span>
                         <input type="text" id="field-pro-team" placeholder="School / speaker names"

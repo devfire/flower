@@ -38,6 +38,9 @@ jobs:
       - name: Unit tests
         run: cargo test
 
+      - name: NSDA topic extraction tests
+        run: python3 -m unittest discover -s scripts -v
+
       - name: Install Trunk
         uses: taiki-e/install-action@trunk
 

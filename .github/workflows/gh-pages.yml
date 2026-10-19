@@ -3,6 +3,10 @@ name: Deploy Flower to GitHub Pages
 on:
   push:
     branches: [main]
+  # Weekly rebuild so a new NSDA PF topic period lands without a code
+  # push (issue #13): the fetch step below re-extracts topics.json.
+  schedule:
+    - cron: "17 6 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -38,6 +42,12 @@ jobs:
 
       - name: Install Trunk
         uses: taiki-e/install-action@trunk
+
+      # Build-time NSDA extraction (issue #13): a browser fetch is
+      # CORS-blocked, so curl the topics page here instead. On failure
+      # the script keeps the committed topics.json and logs ::error::.
+      - name: Fetch current NSDA PF topic into topics.json
+        run: python3 scripts/fetch_nsda_topic.py --output topics.json
 
       - name: Build (relative public URL works for project pages, user pages, and custom domains)
         run: trunk build --release --public-url ./

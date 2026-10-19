@@ -11,6 +11,7 @@ lay judges who want to flow but don't really know how yet. Based on the NSDA
 - 🐰 **Momo-chan suggestion bubbles** walk you through all 11 speeches/crossfires, one at a time
 - 🎯 **Focus mode** dims speeches that aren't happening right now
 - ✂️ Tap-to-insert **shorthand cheat sheet**, crossfire notes, guided decision ballot
+- 🎀 **Resolution pre-filled** with the current NSDA Public Forum topic (extracted at build time into `topics.json`; a saved/typed topic is never overwritten — a newer NSDA wording is only offered, and the bundled fallback works offline)
 - 💾 Auto-saves in your browser (localStorage) — nothing leaves your device
 - 🖨️ Print / save-PDF prints both sheets + the ballot, like the two paper pages
 
@@ -44,5 +45,8 @@ No server, database, or API keys: it's a fully static WASM site.
 | `src/model.rs` | Speeches, the 11-step guide + tips, marks, shorthand, stored data |
 | `src/state.rs` | Per-cell reactive signals, localStorage snapshot save/load |
 | `src/app.rs` | All UI: hero, guide + timers, flow sheets, ballot |
+| `src/topic.rs` | NSDA resolution: bundled fallback, same-origin `topics.json` fetch, pre-fill/offer decision |
+| `topics.json` | Last bundled NSDA PF resolution (fallback; refreshed at deploy time) |
+| `scripts/fetch_nsda_topic.py` | Build-time NSDA topics-page extraction (+ offline tests in `scripts/test_fetch_nsda_topic.py`) |
 | `style.css` | Kawaii pastel theme, responsive + print styles |
 | `index.html` | Trunk entry page |
