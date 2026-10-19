@@ -530,7 +530,7 @@ fn FlowSheet(
     view! {
         <div class=sheet_class>
             <div class="flow-scroll">
-                <div class="flow-grid" style=format!("grid-template-columns: 170px repeat({}, minmax(150px, 1fr));", SPEECH_COLS.len())>
+                <div class="flow-grid" style=format!("grid-template-columns: minmax(8rem, 11rem) repeat({}, minmax(6.5rem, 1fr));", SPEECH_COLS.len())>
                     <div class="fh fh-corner">
                         {format!("{} {} arguments ↓", side.emoji(), side.label())}
                         <span class="fh-sub">"one row = one argument"</span>
