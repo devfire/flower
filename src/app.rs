@@ -650,20 +650,9 @@ fn FlowRow(
                 <button class="row-del" class:row-del-armed=move || confirming_delete.get()
                     title="Delete this argument row" aria-label=format!("Delete {} argument {} row", side.label(), row_index)
                     aria-expanded=move || if confirming_delete.get() { "true" } else { "false" }
-                    on:click={let s = state.clone(); let r = row.clone(); move |_| {
-                        // An untouched row holds nothing to lose: skip the
-                        // confirmation entirely instead of nagging.
-                        let is_empty = r.title.get_untracked().trim().is_empty()
-                            && r.cells.iter().all(|c| {
-                                c.text.get_untracked().trim().is_empty()
-                                    && c.mark.get_untracked() == Mark::None
-                            });
-                        if is_empty {
-                            s.remove_row(side, row_id);
-                        } else {
-                            confirming_delete.update(|armed| *armed = !*armed);
-                        }
-                    }}>"✕"</button>
+                    on:click=move |_| {
+                        confirming_delete.update(|armed| *armed = !*armed);
+                    }>"✕"</button>
                 {{let state = state.clone(); move || confirming_delete.get().then(|| {
                     let s = state.clone();
                     view! {
