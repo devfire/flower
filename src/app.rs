@@ -509,8 +509,6 @@ pub fn App() -> impl IntoView {
             </main>
 
             <footer class="footer">
-                <p>"Made with for lay judges — based on the NSDA “Intro to Flowing” judge training. "
-                "Remember: a blank box is information, an arrow is a story, and your plain-words reason helps debaters most of all."</p>
                 <p class="footer-small">"Your flow auto-saves only in this browser (localStorage) — nothing leaves your device."</p>
             </footer>
         </div>
