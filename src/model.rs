@@ -20,12 +20,6 @@ impl Side {
             Side::Con => "Con",
         }
     }
-    pub fn emoji(self) -> &'static str {
-        match self {
-            Side::Pro => "🌸",
-            Side::Con => "🍃",
-        }
-    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize, Default)]

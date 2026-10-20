@@ -10,10 +10,10 @@ use leptos::task::spawn_local;
 fn placeholder_for(sheet: Side, col: usize) -> &'static str {
     let speech_side = SPEECH_COLS[col].side;
     match col {
-        0 | 1 => "Claim + why it matters…\ne.g. “Plastic → oceans 🌊”",
+        0 | 1 => "Claim + why it matters…\ne.g. “Plastic → oceans”",
         4 | 5 => "➜ Extend: repeat the argument\n+ answer their best reply…",
         6 | 7 => "⚖️ “Vote for us because…”\ntheir #1 reason + weighing…",
-        _ if speech_side == sheet => "🛡️ Defend: answer their reply…",
+        _ if speech_side == sheet => "Defend: answer their reply…",
         _ => "↩️ Their answer to this argument…\n(leave blank = dropped 💤)",
     }
 }
@@ -213,7 +213,7 @@ pub fn App() -> impl IntoView {
     view! {
         <div class="page">
             <header class="hero">
-                <div class="hero-mascot" aria-hidden="true">"🌸"</div>
+                <div class="hero-mascot" aria-hidden="true">""</div>
                 <div class="hero-text">
                     <h1>"Flower" <span class="hero-sub">"easy flowing for PF judges"</span></h1>
                     <p class="hero-tag">
@@ -230,7 +230,7 @@ pub fn App() -> impl IntoView {
                             save(&st_sample);
                         }
                     }>
-                        "🧸 See an example round"
+                        "See an example round"
                     </button>
                     <button class="btn btn-soft" on:click=move |_| {
                         if confirm("Start a brand-new round? This clears the current flow.") {
@@ -244,7 +244,7 @@ pub fn App() -> impl IntoView {
                             // reset: both teams start again at 3:00.
                             timer_bank.update(TimerBank::reset_all_prep);
                         }
-                    }>"🫧 New round"</button>
+                    }>"New round"</button>
                     <button class="btn btn-soft" on:click=move |_| print_page()>"🖨️ Print / save PDF"</button>
                 </div>
             </header>
@@ -264,7 +264,7 @@ pub fn App() -> impl IntoView {
             <main>
             // ---------- Round setup ----------
             <section class="card setup-card">
-                <h2><span class="card-ico">"🎀"</span> "1 · Set up the round" <span class="saved-note" class:saved-note-failed=move || st_saved.save_failed.get()>{move || if st_saved.save_failed.get() { "⚠️ Not saved — this browser is blocking or out of storage; copy anything important before closing" } else { "✓ auto-saves on this device" }}</span></h2>
+                <h2><span class="card-ico">""</span> "1 · Set up the round" <span class="saved-note" class:saved-note-failed=move || st_saved.save_failed.get()>{move || if st_saved.save_failed.get() { "⚠️ Not saved — this browser is blocking or out of storage; copy anything important before closing" } else { "✓ auto-saves on this device" }}</span></h2>
                 <div class="setup-grid">
                     <label class="field field-wide">
                         <span>"Resolution / topic"</span>
@@ -298,14 +298,14 @@ pub fn App() -> impl IntoView {
                         }}
                     </div>
                     <label class="field">
-                        <span>"🌸 Pro team"</span>
+                        <span>"Pro team"</span>
                         <input type="text" id="field-pro-team" placeholder="School / speaker names"
                             on:focus=move |_| insert_ctx.focus(TextTarget::ProTeam)
                             prop:value=move || state.pro_team.get()
                             on:input={let s = state.clone(); move |ev| { s.pro_team.set(event_target_value(&ev)); save(&s); }} />
                     </label>
                     <label class="field">
-                        <span>"🍃 Con team"</span>
+                        <span>"Con team"</span>
                         <input type="text" id="field-con-team" placeholder="School / speaker names"
                             on:focus=move |_| insert_ctx.focus(TextTarget::ConTeam)
                             prop:value=move || state.con_team.get()
@@ -313,7 +313,7 @@ pub fn App() -> impl IntoView {
                     </label>
                 </div>
                 <div class="howto">
-                    <div class="howto-step"><b>"📄 Two pages"</b><span>"Pro arguments live on the blue sheet, Con arguments on the green sheet — never mixed."</span></div>
+                    <div class="howto-step"><b>"Two pages"</b><span>"Pro arguments live on the blue sheet, Con arguments on the green sheet — never mixed."</span></div>
                     <div class="howto-arrow" aria-hidden="true">"➜"</div>
                     <div class="howto-step"><b>"⬇️ Then across"</b><span>"Each new speech gets the next column. Answers go directly right of the argument they answer."</span></div>
                     <div class="howto-arrow" aria-hidden="true">"➜"</div>
@@ -323,7 +323,7 @@ pub fn App() -> impl IntoView {
 
             // ---------- Guided speech walk ----------
             <section class="card guide-card no-print">
-                <h2><span class="card-ico">"🧭"</span> "2 · Follow the round, one speech at a time"</h2>
+                <h2>"2 · Follow the round, one speech at a time"</h2>
                 <div class="stepper">
                     {GUIDE.iter().enumerate().map(|(i, g)| {
                         let cls = move || {
@@ -353,9 +353,9 @@ pub fn App() -> impl IntoView {
                             </p>
                             <p class="bubble-main">{move || GUIDE[step.get()].bubble}</p>
                             <ul class="bubble-list">
-                                <li><b>"👂 Listen for: "</b>{move || GUIDE[step.get()].listen_for}</li>
-                                <li><b>"✏️ Write: "</b>{move || GUIDE[step.get()].do_it}</li>
-                                <li><b>"🌧️ Watch out: "</b>{move || GUIDE[step.get()].watch_out}</li>
+                                <li><b>"Listen for: "</b>{move || GUIDE[step.get()].listen_for}</li>
+                                <li><b>"Write: "</b>{move || GUIDE[step.get()].do_it}</li>
+                                <li><b>"Watch out: "</b>{move || GUIDE[step.get()].watch_out}</li>
                             </ul>
                         </div>
                     </div>
@@ -379,10 +379,10 @@ pub fn App() -> impl IntoView {
                         <div class="prep-row">
                             <span>"Prep left (3:00 per team, whole round):"</span>
                             <button class="btn btn-chip btn-pro" on:click=move |_| start_prep(Side::Pro)>
-                                {move || format!("🌸 Pro · {}", fmt_time(timer_bank.get().secs_for(TimerKind::Prep(Side::Pro), timer_secs.get())))}
+                                {move || format!("Pro · {}", fmt_time(timer_bank.get().secs_for(TimerKind::Prep(Side::Pro), timer_secs.get())))}
                             </button>
                             <button class="btn btn-chip" title="Reset only Pro prep back to 3:00" aria-label="Reset only Pro prep back to 3:00"
-                                on:click=move |_| { if confirm("Reset only 🌸 Pro prep back to 3:00?") { reset_prep(Side::Pro); } }>"↺ 🌸"</button>
+                                on:click=move |_| { if confirm("Reset only Pro prep back to 3:00?") { reset_prep(Side::Pro); } }>"↺ "</button>
                             <button class="btn btn-chip btn-con" on:click=move |_| start_prep(Side::Con)>
                                 {move || format!("🍃 Con · {}", fmt_time(timer_bank.get().secs_for(TimerKind::Prep(Side::Con), timer_secs.get())))}
                             </button>
@@ -401,24 +401,24 @@ pub fn App() -> impl IntoView {
                 <label class="focus-toggle">
                     <input type="checkbox" prop:checked=move || focus_mode.get()
                         on:change=move |ev| focus_mode.set(event_target_checked(&ev)) />
-                    <span><b>"🎯 Focus mode"</b> " — softly dim speeches that aren't happening right now, so your eyes always know where to write."</span>
+                    <span><b>"Focus mode"</b> " — softly dim speeches that aren't happening right now, so your eyes always know where to write."</span>
                 </label>
             </section>
 
             // ---------- Flow sheets ----------
             <section class="card flow-card">
-                <h2><span class="card-ico">"🌷"</span> "3 · Your flow" </h2>
+                <h2><span class="card-ico">""</span> "3 · Your flow" </h2>
                 <div class="tabs no-print">
                     <button class="tab tab-pro" class:tab-on=move || tab.get() == Side::Pro
                         aria-pressed=move || if tab.get() == Side::Pro { "true" } else { "false" }
                         on:click=move |_| tab.set(Side::Pro)>
-                        "🌸 Pro sheet" <span class="tab-hint">"their arguments ↓, round →"</span>
+                        "Pro sheet" <span class="tab-hint">"their arguments ↓, round →"</span>
                     </button>
                     <span class="tab-arrow" aria-hidden="true">"⇄"</span>
                     <button class="tab tab-con" class:tab-on=move || tab.get() == Side::Con
                         aria-pressed=move || if tab.get() == Side::Con { "true" } else { "false" }
                         on:click=move |_| tab.set(Side::Con)>
-                        "🍃 Con sheet" <span class="tab-hint">"their arguments ↓, round →"</span>
+                        "Con sheet" <span class="tab-hint">"their arguments ↓, round →"</span>
                     </button>
                 </div>
                 <p class="flow-legend no-print">
@@ -454,15 +454,15 @@ pub fn App() -> impl IntoView {
 
             // Print-only: both sheets, like the two paper pages.
             <section class="card print-only">
-                <h2>"🌸 Pro flow"</h2>
+                <h2>"Pro flow"</h2>
                 <FlowSheet state=st_flow.clone() side=Side::Pro current_col=None focus_mode=focus_mode insert_ctx=None />
-                <h2 style="margin-top:20px">"🍃 Con flow"</h2>
+                <h2 style="margin-top:20px">"Con flow"</h2>
                 <FlowSheet state=st_flow.clone() side=Side::Con current_col=None focus_mode=focus_mode insert_ctx=None />
             </section>
 
             // ---------- Crossfire notes ----------
             <section class="card notes-card">
-                <h2><span class="card-ico">"☕"</span> "Crossfire notes" <span class="card-sub">"optional — only concessions & admissions"</span></h2>
+                <h2>"Crossfire notes" <span class="card-sub">"optional — only concessions & admissions"</span></h2>
                 <textarea class="big-notes" id="notes-crossfire" rows="3" aria-label="Crossfire notes" placeholder="e.g. “Pro agreed recycling is only 9% — that helps Con C1…”"
                     on:focus=move |_| insert_ctx.focus(TextTarget::CrossfireNotes)
                     prop:value=move || state.crossfire_notes.get()
@@ -472,7 +472,7 @@ pub fn App() -> impl IntoView {
 
             // ---------- Decision ----------
             <section class="card ballot-card">
-                <h2><span class="card-ico">"🏆"</span> "4 · Your decision" </h2>
+                <h2>"4 · Your decision" </h2>
                 <p class="ballot-intro">"No perfect flow required. Ask three questions:"</p>
                 <ol class="ballot-qs">
                     <li>"Which arguments were " <b>"answered the least"</b> " (💤 dropped or weakly answered)?"</li>
@@ -483,7 +483,7 @@ pub fn App() -> impl IntoView {
                 <div class="winner-row no-print">
                     <span>"I vote for:"</span>
                     <button class="btn winner-btn btn-pro" class:winner-on=move || state.winner.get() == "Pro" aria-pressed=move || if state.winner.get() == "Pro" { "true" } else { "false" }
-                        on:click={let s = state.clone(); move |_| { s.winner.set("Pro".to_string()); save(&s); }}>"🌸 Pro"</button>
+                        on:click={let s = state.clone(); move |_| { s.winner.set("Pro".to_string()); save(&s); }}>"Pro"</button>
                     <button class="btn winner-btn btn-con" class:winner-on=move || state.winner.get() == "Con" aria-pressed=move || if state.winner.get() == "Con" { "true" } else { "false" }
                         on:click={let s = state.clone(); move |_| { s.winner.set("Con".to_string()); save(&s); }}>"🍃 Con"</button>
                 </div>
@@ -509,7 +509,7 @@ pub fn App() -> impl IntoView {
             </main>
 
             <footer class="footer">
-                <p>"Made with 🌸 for lay judges — based on the NSDA “Intro to Flowing” judge training. "
+                <p>"Made with for lay judges — based on the NSDA “Intro to Flowing” judge training. "
                 "Remember: a blank box is information, an arrow is a story, and your plain-words reason helps debaters most of all."</p>
                 <p class="footer-small">"Your flow auto-saves only in this browser (localStorage) — nothing leaves your device."</p>
             </footer>
@@ -525,7 +525,7 @@ fn decision_text(state: &RoundState) -> String {
         d.winner.clone()
     };
     format!(
-        "🌸 Flower — PF decision\nTopic: {}\nPro: {} · Con: {}\nWinner: {}\nReason: {}",
+        "Flower — PF decision\nTopic: {}\nPro: {} · Con: {}\nWinner: {}\nReason: {}",
         d.topic, d.pro_team, d.con_team, winner, d.rfd
     )
 }
@@ -579,7 +579,7 @@ fn FlowSheet(
             <div class="flow-scroll">
                 <div class="flow-grid" style=format!("grid-template-columns: minmax(8rem, 11rem) repeat({}, minmax(6.5rem, 1fr));", SPEECH_COLS.len())>
                     <div class="fh fh-corner">
-                        {format!("{} {} arguments ↓", side.emoji(), side.label())}
+                        {format!("{} arguments ↓", side.label())}
                         <span class="fh-sub">"one row = one argument"</span>
                     </div>
                     {SPEECH_COLS.iter().enumerate().map(|(col, sc)| {
@@ -589,7 +589,7 @@ fn FlowSheet(
                             <div class="fh" class:fh-now=is_now class:fh-dim=dim>
                                 {if is_now { Some(view! { <span class="fh-badge">"✏️ you are here"</span> }) } else { None }}
                                 <span class="fh-name">{sc.full}</span>
-                                <span class="fh-sub">{format!("{} · {} min", sc.side.emoji(), sc.minutes)}</span>
+                                <span class="fh-sub">{format!("{} min", sc.minutes)}</span>
                             </div>
                         }
                     }).collect_view()}
@@ -604,8 +604,8 @@ fn FlowSheet(
             </button>
             <p class="sheet-tip no-print">
                 {match side {
-                    Side::Pro => "Tip: start a new row each time Pro says “our next contention is…”. 🌸",
-                    Side::Con => "Tip: start a new row each time Con says “our next contention is…”. 🍃",
+                    Side::Pro => "Tip: start a new row each time Pro says “our next contention is…”. ",
+                    Side::Con => "Tip: start a new row each time Con says “our next contention is…”. ",
                 }}
             </p>
         </div>
