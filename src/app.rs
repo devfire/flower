@@ -384,10 +384,10 @@ pub fn App() -> impl IntoView {
                             <button class="btn btn-chip" title="Reset only Pro prep back to 3:00" aria-label="Reset only Pro prep back to 3:00"
                                 on:click=move |_| { if confirm("Reset only Pro prep back to 3:00?") { reset_prep(Side::Pro); } }>"↺ "</button>
                             <button class="btn btn-chip btn-con" on:click=move |_| start_prep(Side::Con)>
-                                {move || format!("🍃 Con · {}", fmt_time(timer_bank.get().secs_for(TimerKind::Prep(Side::Con), timer_secs.get())))}
+                                {move || format!("Con · {}", fmt_time(timer_bank.get().secs_for(TimerKind::Prep(Side::Con), timer_secs.get())))}
                             </button>
                             <button class="btn btn-chip" title="Reset only Con prep back to 3:00" aria-label="Reset only Con prep back to 3:00"
-                                on:click=move |_| { if confirm("Reset only 🍃 Con prep back to 3:00?") { reset_prep(Side::Con); } }>"↺ 🍃"</button>
+                                on:click=move |_| { if confirm("Reset only Con prep back to 3:00?") { reset_prep(Side::Con); } }>"↺"</button>
                         </div>
                         <div class="step-nav">
                             <button class="btn btn-soft" disabled={move || step.get() == 0}
@@ -485,7 +485,7 @@ pub fn App() -> impl IntoView {
                     <button class="btn winner-btn btn-pro" class:winner-on=move || state.winner.get() == "Pro" aria-pressed=move || if state.winner.get() == "Pro" { "true" } else { "false" }
                         on:click={let s = state.clone(); move |_| { s.winner.set("Pro".to_string()); save(&s); }}>"Pro"</button>
                     <button class="btn winner-btn btn-con" class:winner-on=move || state.winner.get() == "Con" aria-pressed=move || if state.winner.get() == "Con" { "true" } else { "false" }
-                        on:click={let s = state.clone(); move |_| { s.winner.set("Con".to_string()); save(&s); }}>"🍃 Con"</button>
+                        on:click={let s = state.clone(); move |_| { s.winner.set("Con".to_string()); save(&s); }}>"Con"</button>
                 </div>
                 <p class="winner-print">{move || {
                     let w = state.winner.get();
