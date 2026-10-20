@@ -92,7 +92,7 @@ pub fn App() -> impl IntoView {
     };
     // Advancing the walk updates speech, timer and sheet in place:
     // it must never scroll/jump the page under the judge.
-    let set_step = move |next: usize| {
+    let set_step = Callback::new(move |next: usize| {
         let next = next.min(GUIDE.len() - 1);
         step.set(next);
         stop_timer();
@@ -113,7 +113,15 @@ pub fn App() -> impl IntoView {
         if let Some(side) = sheet {
             tab.set(side);
         }
-    };
+    });
+    // Flow-header click: jump to the guided step that writes in that
+    // column. Crossfire steps have no column, so they stay reachable
+    // only via Prev/Next, exactly as before.
+    let on_speech_click = Callback::new(move |col: usize| {
+        if let Some(i) = GUIDE.iter().position(|g| g.flow_col == Some(col)) {
+            set_step.run(i);
+        }
+    });
     let toggle_timer = move |_| {
         if running.get_untracked() {
             stop_timer();
@@ -232,7 +240,7 @@ pub fn App() -> impl IntoView {
                             // the current NSDA pre-fill like a fresh visit.
                             st_clear.topic.set(nsda_topic.get_untracked().resolution);
                             save(&st_clear);
-                            set_step(0);
+                            set_step.run(0);
                             // A brand-new round is the other explicit prep
                             // reset: both teams start again at 3:00.
                             timer_bank.update(TimerBank::reset_all_prep);
@@ -310,25 +318,6 @@ pub fn App() -> impl IntoView {
             // ---------- Guided speech walk ----------
             <section class="card guide-card no-print">
                 <h2>"2 · Follow the round, one speech at a time"</h2>
-                <div class="stepper">
-                    {GUIDE.iter().enumerate().map(|(i, g)| {
-                        let cls = move || {
-                            if step.get() == i { "step-chip is-now" }
-                            else if i < step.get() { "step-chip is-done" }
-                            else { "step-chip" }
-                        };
-                        view! {
-                            <span class="step-wrap">
-                                {if i > 0 { Some(view! { <span class="step-arrow" aria-hidden="true">"➜"</span> }) } else { None }}
-                                <button class=cls aria-current=move || (step.get() == i).then_some("step") on:click=move |_| set_step(i)>
-                                    {if i < step.get_untracked() { "✓ " } else { "" }}
-                                    {g.title}
-                                </button>
-                            </span>
-                        }
-                    }).collect_view()}
-                </div>
-
                 <div class="guide-body">
                     <div class="bubble-wrap">
                         <div class="mascot" aria-hidden="true">"🐰"</div>
@@ -377,9 +366,9 @@ pub fn App() -> impl IntoView {
                         </div>
                         <div class="step-nav">
                             <button class="btn btn-soft" disabled={move || step.get() == 0}
-                                on:click=move |_| set_step(step.get_untracked().saturating_sub(1))>"⬅ Prev speech"</button>
+                                on:click=move |_| set_step.run(step.get_untracked().saturating_sub(1))>"⬅ Prev speech"</button>
                             <button class="btn btn-main" disabled={move || step.get() >= GUIDE.len() - 1}
-                                on:click=move |_| set_step(step.get_untracked() + 1)>"Next speech ➜"</button>
+                                on:click=move |_| set_step.run(step.get_untracked() + 1)>"Next speech ➜"</button>
                         </div>
                     </div>
                 </div>
@@ -416,7 +405,7 @@ pub fn App() -> impl IntoView {
 
                 {{let s = st_flow.clone(); move || {
                     let side = tab.get();
-                    view! { <FlowSheet state=s.clone() side=side current_col=current_col() focus_mode=focus_mode insert_ctx=Some(insert_ctx) /> }
+                    view! { <FlowSheet state=s.clone() side=side current_col=current_col() focus_mode=focus_mode insert_ctx=Some(insert_ctx) on_speech_click=Some(on_speech_click) /> }
                 }}}
 
                 <details class="shorthand no-print">
@@ -441,9 +430,9 @@ pub fn App() -> impl IntoView {
             // Print-only: both sheets, like the two paper pages.
             <section class="card print-only">
                 <h2>"Pro flow"</h2>
-                <FlowSheet state=st_flow.clone() side=Side::Pro current_col=None focus_mode=focus_mode insert_ctx=None />
+                <FlowSheet state=st_flow.clone() side=Side::Pro current_col=None focus_mode=focus_mode insert_ctx=None on_speech_click=None />
                 <h2 style="margin-top:20px">"Con flow"</h2>
-                <FlowSheet state=st_flow.clone() side=Side::Con current_col=None focus_mode=focus_mode insert_ctx=None />
+                <FlowSheet state=st_flow.clone() side=Side::Con current_col=None focus_mode=focus_mode insert_ctx=None on_speech_click=None />
             </section>
 
             // ---------- Crossfire notes ----------
@@ -552,6 +541,7 @@ fn FlowSheet(
     current_col: Option<usize>,
     focus_mode: RwSignal<bool>,
     insert_ctx: Option<InsertCtx>,
+    on_speech_click: Option<Callback<usize>>,
 ) -> impl IntoView {
     let rows = state.rows(side);
     let sheet_class = match side {
@@ -569,12 +559,25 @@ fn FlowSheet(
                     {SPEECH_COLS.iter().enumerate().map(|(col, sc)| {
                         let is_now = current_col == Some(col);
                         let dim = move || focus_mode.get() && current_col.is_some() && !is_now;
-                        view! {
-                            <div class="fh" class:fh-now=is_now class:fh-dim=dim>
-                                {if is_now { Some(view! { <span class="fh-badge">"✏️ you are here"</span> }) } else { None }}
-                                <span class="fh-name">{sc.full}</span>
-                                <span class="fh-sub">{format!("{} min", sc.minutes)}</span>
-                            </div>
+                        match on_speech_click {
+                            Some(on_click) => view! {
+                                <button type="button" class="fh fh-click" class:fh-now=is_now class:fh-dim=dim
+                                    aria-current=is_now.then_some("step")
+                                    title=format!("Go to {}", sc.full)
+                                    on:click=move |_| on_click.run(col)>
+                                    {if col > 0 { Some(view! { <span class="fh-arrow" aria-hidden="true">"➜"</span> }) } else { None }}
+                                    {if is_now { Some(view! { <span class="fh-badge">"✏️ you are here"</span> }) } else { None }}
+                                    <span class="fh-name">{sc.full}</span>
+                                    <span class="fh-sub">{format!("{} min", sc.minutes)}</span>
+                                </button>
+                            }.into_any(),
+                            None => view! {
+                                <div class="fh" class:fh-now=is_now class:fh-dim=dim>
+                                    {if is_now { Some(view! { <span class="fh-badge">"✏️ you are here"</span> }) } else { None }}
+                                    <span class="fh-name">{sc.full}</span>
+                                    <span class="fh-sub">{format!("{} min", sc.minutes)}</span>
+                                </div>
+                            }.into_any(),
                         }
                     }).collect_view()}
 

@@ -97,17 +97,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .topic-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: -4px; }
 .topic-note { font-family: "Nunito", sans-serif; font-size: .82rem; color: var(--muted); font-weight: 700; margin: 0; }
 
-/* ---------- guide / stepper ---------- */
-.stepper { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-bottom: 16px; }
-.step-wrap { display: inline-flex; align-items: center; gap: 2px; }
-.step-arrow { color: var(--blue-deep); font-size: .8rem; }
-.step-chip {
-  border: 2px solid var(--border); background: #f7fbff; border-radius: 999px;
-  padding: 5px 11px; font-size: .8rem; font-weight: 800; cursor: pointer; white-space: nowrap;
-}
-.step-chip:hover { border-color: var(--blue-deep); }
-.step-chip.is-done { background: var(--mint); border-color: var(--mint-deep); color: #14532d; }
-.step-chip.is-now { background: linear-gradient(135deg, #1f5c86, #256a99); color: #fff; border-color: #1f5c86; transform: scale(1.06); box-shadow: 0 4px 12px rgba(47,127,184,.35); }
+/* ---------- guide ---------- */
 .guide-body { display: grid; grid-template-columns: repeat(2, clamp(250px, 22vw, 380px)); gap: clamp(12px, 1.4vw, 24px); }
 .guide-body > * { min-width: 0; }
 .bubble-wrap { display: flex; gap: 12px; align-items: flex-start; }
@@ -163,6 +153,16 @@ button, input, textarea { font: inherit; color: inherit; }
 .sheet-con .fh { background: #dff7ea; }
 .fh-sub { font-size: .7rem; color: var(--muted); font-weight: 700; }
 .fh-now { outline: 3px solid var(--blue-deep); outline-offset: 1px; transform: translateY(-2px); }
+/* Interactive sheet only: headers double as the round's step navigation,
+   arrow-linked left ➜ right like the flow itself (print sheets stay static). */
+button.fh-click { border: 2px solid transparent; cursor: pointer; text-align: left; width: 100%; }
+.fh-click:hover { border-color: var(--blue-deep); }
+.fh-click:focus-visible { outline: 3px solid var(--blue-deep); outline-offset: 1px; }
+.fh-arrow {
+  position: absolute; left: -5px; top: 50%; transform: translate(-50%, -50%); z-index: 2;
+  color: #256a99; font-size: .75rem; line-height: 1; background: var(--surface);
+  border-radius: 999px; padding: 1px;
+}
 /* Focus-mode dimming must not fade text (opacity .38 failed contrast,
    issue #9): desaturate + cool the background instead, text stays full-strength. */
 .fh-dim, .cell-dim { filter: saturate(.45); }
@@ -281,8 +281,6 @@ button, input, textarea { font: inherit; color: inherit; }
   .page { padding: 12px 10px 40px; }
   .card { padding: 16px 14px; }
   /* Long rows of chips scroll sideways instead of wrapping into a tall stack. */
-  .stepper { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 6px; }
-  .step-wrap { flex: 0 0 auto; }
   .flow-legend { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
   .legend-chip { flex: 0 0 auto; }
 }
