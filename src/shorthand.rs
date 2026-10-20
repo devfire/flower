@@ -271,17 +271,17 @@ mod tests {
 
     #[test]
     fn caret_inside_a_multibyte_char_snaps_to_its_start() {
-        // Byte 2 is inside "🌸" (bytes 0..4) in the source text.
+        // Byte 2 is inside "🐰" (bytes 0..4) in the source text.
         assert_eq!(
-            inserted_text("🌸x", Some((2, 2)), "→"),
-            ("→🌸x".to_string(), 3)
+            inserted_text("🐰x", Some((2, 2)), "→"),
+            ("→🐰x".to_string(), 3)
         );
     }
 
     #[test]
     fn utf16_offsets_round_trip_through_emoji() {
-        let text = "a🌸b";
-        // UTF-16: a=0, 🌸=1..3, b=3, end=4.
+        let text = "a🐰b";
+        // UTF-16: a=0, 🐰=1..3, b=3, end=4.
         assert_eq!(utf16_to_byte(text, 0), 0);
         assert_eq!(utf16_to_byte(text, 1), 1);
         assert_eq!(utf16_to_byte(text, 3), 5);

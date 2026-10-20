@@ -1,10 +1,10 @@
-# 🌸 Flower — easy PF flowing for lay judges
+# Flower — easy PF flowing for lay judges
 
 A kawaii pastel, Rust + WebAssembly flow sheet for **Public Forum** debate, built for
 lay judges who want to flow but don't really know how yet. Based on the NSDA
 [*Intro to Flowing* judge training](https://www.speechanddebate.org/wp-content/uploads/Big-Questions-Judge-Training-Intro-to-Flowing.pdf):
 
-- 📄 **Two sheets** — 🌸 Pro arguments on the blue sheet, 🍃 Con arguments on the green sheet
+- 📄 **Two sheets** — Pro arguments on the blue sheet, 🍃 Con arguments on the green sheet
 - ➜ **One column per speech**, answers written directly right of the argument they answer
 - 💤 **Blank box = dropped argument** (the ballot section spots these for you)
 - ⭐ **Extended / key-argument tags**, ⚖️ weighing prompts, speech + prep timers
