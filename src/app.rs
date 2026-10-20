@@ -460,7 +460,7 @@ pub fn App() -> impl IntoView {
                     <label class="focus-toggle">
                         <input type="checkbox" prop:checked=move || focus_mode.get()
                             on:change=move |ev| { focus_mode.set(event_target_checked(&ev)); persist_progress.run(()); } />
-                        <span><b>"Focus mode"</b> " — softly dim speeches that aren't happening right now, so your eyes always know where to write."</span>
+                        <span><b>"Focus mode"</b></span>
                     </label>
                     <div class="order-toggle" role="group" aria-label="Speaking order">
                         <button class="order-btn" class:order-on=move || speaking_order.get() == SpeakingOrder::ProFirst

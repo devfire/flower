@@ -134,7 +134,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .focus-toggle { display: flex; gap: 10px; align-items: flex-start; margin: 16px 0 12px; background: #eef6ff; border: 2px solid var(--lav); border-radius: 14px; padding: 12px 14px; cursor: pointer; line-height: 1.45; }
 .focus-toggle input { width: 20px; height: 20px; accent-color: #2f7fb8; margin-top: 2px; }
 .flow-controls { display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; margin: 16px 0 12px; }
-.flow-controls .focus-toggle { flex: 1; margin: 0; }
+.flow-controls .focus-toggle { flex: none; margin: 0; }
 .order-toggle { display: flex; align-items: center; gap: 4px; background: #eef6ff; border: 2px solid var(--lav); border-radius: 14px; padding: 4px; }
 .order-btn { border: 0; background: transparent; color: var(--muted); font-weight: 700; padding: 6px 14px; border-radius: 10px; cursor: pointer; }
 .order-btn.order-on { background: #2f7fb8; color: #fff; }
