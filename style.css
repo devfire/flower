@@ -107,7 +107,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .topic-note { font-family: "Nunito", sans-serif; font-size: .82rem; color: var(--muted); font-weight: 700; margin: 0; }
 
 /* ---------- guide bubble ---------- */
-.bubble-wrap { display: flex; align-items: flex-start; }
+.bubble-wrap { display: flex; align-items: stretch; }
 .bubble {
   flex: 1; background: linear-gradient(160deg, #e8f4fd, #eef6ff);
   border: 3px solid var(--blue); border-radius: 22px; padding: 16px 18px;
