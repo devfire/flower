@@ -266,6 +266,7 @@ pub fn App() -> impl IntoView {
             // ---------- Round setup ----------
             <section class="card setup-card">
                 <h2><span class="card-ico">""</span> "1 · Set up the round" <span class="saved-note" class:saved-note-failed=move || st_saved.save_failed.get()>{move || if st_saved.save_failed.get() { "⚠️ Not saved — this browser is blocking or out of storage; copy anything important before closing" } else { "✓ auto-saves on this device" }}</span></h2>
+                <div class="setup-layout">
                 <div class="setup-grid">
                     <label class="field field-wide">
                         <span>"Resolution / topic"</span>
@@ -313,6 +314,48 @@ pub fn App() -> impl IntoView {
                             on:input={let s = state.clone(); move |ev| { s.con_team.set(event_target_value(&ev)); save(&s); }} />
                     </label>
                 </div>
+
+                    <div class="timer-box no-print">
+                        <div class="timer-head">
+                            <div class="timer-readout">
+                                <div class="timer-label">{move || timer_label.get()}</div>
+                                <div class="timer-digits" role="timer" aria-label=move || format!("{}: {} remaining", timer_label.get(), fmt_time(timer_secs.get())) class:timer-done=move || timer_secs.get() == 0>
+                                    {move || fmt_time(timer_secs.get())}
+                                </div>
+                            </div>
+                            <div class="sr-only" role="status" aria-live="polite">
+                                {move || timer_announcement.get()}
+                            </div>
+                            <div class="timer-btns">
+                                <button class="btn btn-main" on:click=toggle_timer>
+                                    {move || if running.get() { "⏸ Pause" } else { "▶ Start" }}
+                                </button>
+                                <button class="btn btn-soft" on:click=reset_or_back>
+                                    {move || if matches!(timer_bank.get().active(), TimerKind::Prep(_)) { "↺ Back to speech" } else { "↺ Reset" }}
+                                </button>
+                            </div>
+                        </div>
+                        <div class="prep-row">
+                            <span>"Prep left (3:00 per team, whole round):"</span>
+                            <button class="btn btn-chip btn-pro" on:click=move |_| start_prep(Side::Pro)>
+                                {move || format!("Pro · {}", fmt_time(timer_bank.get().secs_for(TimerKind::Prep(Side::Pro), timer_secs.get())))}
+                            </button>
+                            <button class="btn btn-chip" title="Reset only Pro prep back to 3:00" aria-label="Reset only Pro prep back to 3:00"
+                                on:click=move |_| { if confirm("Reset only Pro prep back to 3:00?") { reset_prep(Side::Pro); } }>"↺ "</button>
+                            <button class="btn btn-chip btn-con" on:click=move |_| start_prep(Side::Con)>
+                                {move || format!("Con · {}", fmt_time(timer_bank.get().secs_for(TimerKind::Prep(Side::Con), timer_secs.get())))}
+                            </button>
+                            <button class="btn btn-chip" title="Reset only Con prep back to 3:00" aria-label="Reset only Con prep back to 3:00"
+                                on:click=move |_| { if confirm("Reset only Con prep back to 3:00?") { reset_prep(Side::Con); } }>"↺"</button>
+                        </div>
+                        <div class="step-nav">
+                            <button class="btn btn-soft" disabled={move || step.get() == 0}
+                                on:click=move |_| set_step.run(step.get_untracked().saturating_sub(1))>"⬅ Prev speech"</button>
+                            <button class="btn btn-main" disabled={move || step.get() >= GUIDE.len() - 1}
+                                on:click=move |_| set_step.run(step.get_untracked() + 1)>"Next speech ➜"</button>
+                        </div>
+                    </div>
+                </div>
             </section>
 
             // ---------- Guided speech walk ----------
@@ -335,42 +378,6 @@ pub fn App() -> impl IntoView {
                         </div>
                     </div>
 
-                    <div class="timer-box">
-                        <div class="timer-label">{move || timer_label.get()}</div>
-                        <div class="timer-digits" role="timer" aria-label=move || format!("{}: {} remaining", timer_label.get(), fmt_time(timer_secs.get())) class:timer-done=move || timer_secs.get() == 0>
-                            {move || fmt_time(timer_secs.get())}
-                        </div>
-                        <div class="sr-only" role="status" aria-live="polite">
-                            {move || timer_announcement.get()}
-                        </div>
-                        <div class="timer-btns">
-                            <button class="btn btn-main" on:click=toggle_timer>
-                                {move || if running.get() { "⏸ Pause" } else { "▶ Start" }}
-                            </button>
-                            <button class="btn btn-soft" on:click=reset_or_back>
-                                {move || if matches!(timer_bank.get().active(), TimerKind::Prep(_)) { "↺ Back to speech" } else { "↺ Reset" }}
-                            </button>
-                        </div>
-                        <div class="prep-row">
-                            <span>"Prep left (3:00 per team, whole round):"</span>
-                            <button class="btn btn-chip btn-pro" on:click=move |_| start_prep(Side::Pro)>
-                                {move || format!("Pro · {}", fmt_time(timer_bank.get().secs_for(TimerKind::Prep(Side::Pro), timer_secs.get())))}
-                            </button>
-                            <button class="btn btn-chip" title="Reset only Pro prep back to 3:00" aria-label="Reset only Pro prep back to 3:00"
-                                on:click=move |_| { if confirm("Reset only Pro prep back to 3:00?") { reset_prep(Side::Pro); } }>"↺ "</button>
-                            <button class="btn btn-chip btn-con" on:click=move |_| start_prep(Side::Con)>
-                                {move || format!("Con · {}", fmt_time(timer_bank.get().secs_for(TimerKind::Prep(Side::Con), timer_secs.get())))}
-                            </button>
-                            <button class="btn btn-chip" title="Reset only Con prep back to 3:00" aria-label="Reset only Con prep back to 3:00"
-                                on:click=move |_| { if confirm("Reset only Con prep back to 3:00?") { reset_prep(Side::Con); } }>"↺"</button>
-                        </div>
-                        <div class="step-nav">
-                            <button class="btn btn-soft" disabled={move || step.get() == 0}
-                                on:click=move |_| set_step.run(step.get_untracked().saturating_sub(1))>"⬅ Prev speech"</button>
-                            <button class="btn btn-main" disabled={move || step.get() >= GUIDE.len() - 1}
-                                on:click=move |_| set_step.run(step.get_untracked() + 1)>"Next speech ➜"</button>
-                        </div>
-                    </div>
                 </div>
 
                 <label class="focus-toggle">

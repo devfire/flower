@@ -85,6 +85,8 @@ button, input, textarea { font: inherit; color: inherit; }
 .btn-con { background: var(--mint); }
 
 /* ---------- setup ---------- */
+.setup-layout { display: grid; grid-template-columns: minmax(0, 1fr) clamp(340px, 34vw, 500px); gap: 14px; align-items: start; }
+.setup-layout > * { min-width: 0; }
 .setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .field { display: flex; flex-direction: column; gap: 6px; font-weight: 800; font-size: .9rem; }
 .field-wide { grid-column: 1 / -1; }
@@ -98,7 +100,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .topic-note { font-family: "Nunito", sans-serif; font-size: .82rem; color: var(--muted); font-weight: 700; margin: 0; }
 
 /* ---------- guide ---------- */
-.guide-body { display: grid; grid-template-columns: repeat(2, clamp(250px, 22vw, 380px)); gap: clamp(12px, 1.4vw, 24px); }
+.guide-body { display: grid; grid-template-columns: minmax(0, 720px); gap: clamp(12px, 1.4vw, 24px); }
 .guide-body > * { min-width: 0; }
 .bubble-wrap { display: flex; gap: 12px; align-items: flex-start; }
 .mascot { font-size: 44px; animation: bob 3.4s ease-in-out infinite; }
@@ -114,15 +116,21 @@ button, input, textarea { font: inherit; color: inherit; }
 .bubble-time { color: var(--muted); font-size: .9rem; }
 .bubble-main { margin: 6px 0 10px; font-size: 1.05rem; font-weight: 700; line-height: 1.5; }
 .bubble-list { margin: 0; padding-left: 18px; line-height: 1.55; display: flex; flex-direction: column; gap: 5px; }
+/* Flattened: readout + controls share one row, prep/step-nav are thin strips below. */
 .timer-box {
   background: linear-gradient(160deg, var(--cream), #fff8e1); border: 3px solid #f2df8e;
-  border-radius: 22px; padding: 16px; text-align: center; display: flex; flex-direction: column; gap: 9px;
+  border-radius: 16px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px;
 }
-.timer-label { font-weight: 800; color: #6b5410; }
-.timer-digits { font-size: clamp(2.2rem, 1.6rem + 1.4vw, 3.4rem); font-weight: 700; line-height: 1; color: #6b5410; }
+.timer-head { display: flex; align-items: center; justify-content: space-between; gap: 6px 10px; flex-wrap: wrap; }
+.timer-readout { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.timer-label { font-weight: 800; color: #6b5410; font-size: .9rem; }
+.timer-digits { font-size: 1.9rem; font-weight: 700; line-height: 1; color: #6b5410; }
 .timer-digits.timer-done { color: #b3261e; animation: bob 1s ease-in-out infinite; }
-.timer-btns, .prep-row, .step-nav { display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; }
-.prep-row { font-size: .85rem; font-weight: 800; color: var(--muted); border-top: 2px dashed #f2df8e; padding-top: 9px; }
+.timer-btns, .prep-row, .step-nav { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.timer-btns { justify-content: flex-end; }
+.timer-box .btn { padding: 5px 12px; }
+.prep-row { font-size: .82rem; font-weight: 800; color: var(--muted); border-top: 2px dashed #f2df8e; padding-top: 6px; justify-content: flex-start; }
+.step-nav { justify-content: space-between; }
 .focus-toggle { display: flex; gap: 10px; align-items: flex-start; margin-top: 16px; background: #eef6ff; border: 2px solid var(--lav); border-radius: 14px; padding: 12px 14px; cursor: pointer; line-height: 1.45; }
 .focus-toggle input { width: 20px; height: 20px; accent-color: #2f7fb8; margin-top: 2px; }
 
@@ -267,16 +275,17 @@ button.fh-click { border: 2px solid transparent; cursor: pointer; text-align: le
 
 /* ---------- responsive ---------- */
 /* Wide screens: content already stretches full-width via .page + 1fr flow
-   columns; give the timer/guide sidebar and type a little more room. */
+   columns; give the type a little more room. */
 @media (min-width: 1920px) {
   body { font-size: 1.06rem; }
   .cell textarea { min-height: 76px; }
 }
 @media (max-width: 1180px) {
-  .guide-body { grid-template-columns: repeat(2, 250px); }
+  .setup-layout { grid-template-columns: minmax(0, 1fr) 340px; }
 }
 @media (max-width: 860px) {
   .guide-body { grid-template-columns: 1fr; }
+  .setup-layout { grid-template-columns: 1fr; }
   .setup-grid { grid-template-columns: 1fr; }
   .page { padding: 12px 10px 40px; }
   .card { padding: 16px 14px; }
@@ -297,7 +306,8 @@ button.fh-click { border: 2px solid transparent; cursor: pointer; text-align: le
   .winner-btn { flex: 1 1 120px; }
   .ballot-actions .btn, .hero-actions .btn { flex: 1 1 auto; }
   .cell textarea { min-height: 54px; }
-  .timer-digits { font-size: 2.2rem; }
+  .timer-digits { font-size: 1.7rem; }
+  .step-nav .btn { flex: 1 1 auto; }
 }
 @media (max-width: 400px) {
   .page { padding: 10px 6px 32px; gap: 12px; }
