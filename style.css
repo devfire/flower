@@ -85,10 +85,17 @@ button, input, textarea { font: inherit; color: inherit; }
 .btn-con { background: var(--mint); }
 
 /* ---------- setup ---------- */
-.setup-layout { display: grid; grid-template-columns: minmax(0, 1fr) clamp(340px, 34vw, 500px); gap: 14px; align-items: stretch; }
+.setup-layout { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1fr) clamp(340px, 30vw, 460px); gap: 14px; align-items: stretch; }
 .setup-layout > * { min-width: 0; }
-/* Top edge lines up with the topic input, below its label (label line + 6px field gap). */
-.setup-layout > .timer-box { margin-top: calc(.9rem * 1.4 + 6px); }
+/* Top edges line up with the topic input, below its label (label line + 6px field gap). */
+.setup-layout > .timer-box, .setup-layout > .bubble-wrap { margin-top: calc(.9rem * 1.4 + 6px); }
+/* Squeezed bubble: one notch smaller than standalone guide type. */
+.setup-layout .bubble-wrap { gap: 8px; }
+.setup-layout .mascot { font-size: 34px; }
+.setup-layout .bubble { padding: 12px 14px; }
+.setup-layout .bubble-title { font-size: 1.05rem; }
+.setup-layout .bubble-main { font-size: .95rem; margin: 4px 0 8px; }
+.setup-layout .bubble-list { font-size: .88rem; line-height: 1.45; gap: 3px; }
 .setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .field { display: flex; flex-direction: column; gap: 6px; font-weight: 800; font-size: .9rem; }
 .field-wide { grid-column: 1 / -1; }
@@ -101,9 +108,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .topic-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: -4px; }
 .topic-note { font-family: "Nunito", sans-serif; font-size: .82rem; color: var(--muted); font-weight: 700; margin: 0; }
 
-/* ---------- guide ---------- */
-.guide-body { display: grid; grid-template-columns: minmax(0, 720px); gap: clamp(12px, 1.4vw, 24px); }
-.guide-body > * { min-width: 0; }
+/* ---------- guide bubble ---------- */
 .bubble-wrap { display: flex; gap: 12px; align-items: flex-start; }
 .mascot { font-size: 44px; animation: bob 3.4s ease-in-out infinite; }
 .bubble {
@@ -133,7 +138,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .timer-box .btn { padding: 5px 12px; }
 .prep-row { font-size: .82rem; font-weight: 800; color: var(--muted); border-top: 2px dashed #f2df8e; padding-top: 6px; justify-content: flex-start; }
 .step-nav { justify-content: space-between; }
-.focus-toggle { display: flex; gap: 10px; align-items: flex-start; margin-top: 16px; background: #eef6ff; border: 2px solid var(--lav); border-radius: 14px; padding: 12px 14px; cursor: pointer; line-height: 1.45; }
+.focus-toggle { display: flex; gap: 10px; align-items: flex-start; margin: 16px 0 12px; background: #eef6ff; border: 2px solid var(--lav); border-radius: 14px; padding: 12px 14px; cursor: pointer; line-height: 1.45; }
 .focus-toggle input { width: 20px; height: 20px; accent-color: #2f7fb8; margin-top: 2px; }
 
 /* ---------- flow grid ---------- */
@@ -284,11 +289,12 @@ button.fh-click { border: 2px solid transparent; cursor: pointer; text-align: le
 }
 @media (max-width: 1180px) {
   .setup-layout { grid-template-columns: minmax(0, 1fr) 340px; }
+  .setup-layout > .bubble-wrap { grid-column: 1 / -1; grid-row: 2; margin-top: 0; }
+  .setup-layout > .timer-box { grid-column: 2; grid-row: 1; }
 }
 @media (max-width: 860px) {
-  .guide-body { grid-template-columns: 1fr; }
   .setup-layout { grid-template-columns: 1fr; }
-  .setup-layout > .timer-box { margin-top: 0; }
+  .setup-layout > .timer-box, .setup-layout > .bubble-wrap { margin-top: 0; grid-column: auto; grid-row: auto; }
   .setup-grid { grid-template-columns: 1fr; }
   .page { padding: 12px 10px 40px; }
   .card { padding: 16px 14px; }
@@ -322,7 +328,9 @@ button.fh-click { border: 2px solid transparent; cursor: pointer; text-align: le
 /* ---------- print: the paper flow, both sheets ---------- */
 @page { size: landscape; margin: 8mm; }
 @media print {
-  .no-print, .hero-actions, .guide-card, .tabs, .cell-marks, .row-del, .add-row { display: none !important; }
+  .no-print, .hero-actions, .tabs, .cell-marks, .row-del, .add-row { display: none !important; }
+  /* Bubble + timer are display:none above; give the fields the full width. */
+  .setup-layout { grid-template-columns: 1fr; }
   .print-only { display: block !important; break-inside: auto; }
   /* Each sheet starts its own landscape page, like the two paper pages. */
   .print-only h2:not(:first-of-type) { break-before: page; }

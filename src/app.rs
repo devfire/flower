@@ -315,6 +315,22 @@ pub fn App() -> impl IntoView {
                     </label>
                 </div>
 
+                    <div class="bubble-wrap no-print">
+                        <div class="mascot" aria-hidden="true">"🐰"</div>
+                        <div class="bubble">
+                            <p class="bubble-title">
+                                {move || GUIDE[step.get()].title}
+                                <span class="bubble-time">{move || format!(" · {} min", GUIDE[step.get()].minutes)}</span>
+                            </p>
+                            <p class="bubble-main">{move || GUIDE[step.get()].bubble}</p>
+                            <ul class="bubble-list">
+                                <li><b>"Listen for: "</b>{move || GUIDE[step.get()].listen_for}</li>
+                                <li><b>"Write: "</b>{move || GUIDE[step.get()].do_it}</li>
+                                <li><b>"Watch out: "</b>{move || GUIDE[step.get()].watch_out}</li>
+                            </ul>
+                        </div>
+                    </div>
+
                     <div class="timer-box no-print">
                         <div class="timer-head">
                             <div class="timer-readout">
@@ -358,38 +374,14 @@ pub fn App() -> impl IntoView {
                 </div>
             </section>
 
-            // ---------- Guided speech walk ----------
-            <section class="card guide-card no-print">
-                <h2>"2 · Follow the round, one speech at a time"</h2>
-                <div class="guide-body">
-                    <div class="bubble-wrap">
-                        <div class="mascot" aria-hidden="true">"🐰"</div>
-                        <div class="bubble">
-                            <p class="bubble-title">
-                                {move || GUIDE[step.get()].title}
-                                <span class="bubble-time">{move || format!(" · {} min", GUIDE[step.get()].minutes)}</span>
-                            </p>
-                            <p class="bubble-main">{move || GUIDE[step.get()].bubble}</p>
-                            <ul class="bubble-list">
-                                <li><b>"Listen for: "</b>{move || GUIDE[step.get()].listen_for}</li>
-                                <li><b>"Write: "</b>{move || GUIDE[step.get()].do_it}</li>
-                                <li><b>"Watch out: "</b>{move || GUIDE[step.get()].watch_out}</li>
-                            </ul>
-                        </div>
-                    </div>
-
-                </div>
-
-                <label class="focus-toggle">
+            // ---------- Flow sheets ----------
+            <section class="card flow-card">
+                <h2><span class="card-ico">""</span> "2 · Your flow" </h2>
+                <label class="focus-toggle no-print">
                     <input type="checkbox" prop:checked=move || focus_mode.get()
                         on:change=move |ev| focus_mode.set(event_target_checked(&ev)) />
                     <span><b>"Focus mode"</b> " — softly dim speeches that aren't happening right now, so your eyes always know where to write."</span>
                 </label>
-            </section>
-
-            // ---------- Flow sheets ----------
-            <section class="card flow-card">
-                <h2><span class="card-ico">""</span> "3 · Your flow" </h2>
                 <div class="tabs no-print">
                     <button class="tab tab-pro" class:tab-on=move || tab.get() == Side::Pro
                         aria-pressed=move || if tab.get() == Side::Pro { "true" } else { "false" }
@@ -454,7 +446,7 @@ pub fn App() -> impl IntoView {
 
             // ---------- Decision ----------
             <section class="card ballot-card">
-                <h2>"4 · Your decision" </h2>
+                <h2>"3 · Your decision" </h2>
                 <p class="ballot-intro">"No perfect flow required. Ask three questions:"</p>
                 <ol class="ballot-qs">
                     <li>"Which arguments were " <b>"answered the least"</b> " (💤 dropped or weakly answered)?"</li>
