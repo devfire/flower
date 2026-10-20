@@ -10,8 +10,14 @@ on:
 permissions:
   contents: read
 
+# Include the caller workflow and event: on a push to main this file runs
+# both standalone (workflow "CI") and as gh-pages.yml's reusable `quality`
+# job (workflow "Deploy Flower to GitHub Pages"; the github context of a
+# reusable call is the caller's). Sharing one group made those two runs
+# cancel each other (#15). Runs of the same caller for the same ref still
+# cancel their predecessors.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
