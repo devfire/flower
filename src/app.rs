@@ -31,8 +31,19 @@ pub fn App() -> impl IntoView {
     if loaded.data.topic.trim().is_empty() {
         loaded.data.topic.clone_from(&bundled_topic.resolution);
     }
+    let initial_order = loaded.data.speaking_order;
     let state = RoundState::from_data(loaded.data);
     state.recovery_notice.set(loaded.recovery_notice);
+    // Issue #21: every guide/timer/sheet view derives from the round's
+    // speaking order, so the coin-flip toggle re-sequences them all.
+    let guide = Signal::derive({
+        let s = state.clone();
+        move || s.speaking_order.get().guide()
+    });
+    let speaking_order = Signal::derive({
+        let s = state.clone();
+        move || s.speaking_order.get()
+    });
     // The NSDA topic currently on offer: starts as the bundled fallback
     // (so provenance works offline), replaced by the same-origin
     // `topics.json` the deploy build extracted when that fetch succeeds.
@@ -72,7 +83,7 @@ pub fn App() -> impl IntoView {
     let timer_bank = RwSignal::new(progress.timer_bank());
     let timer_label = RwSignal::new(match progress.active_prep {
         Some(side) => format!("{} prep time ⏱️", side.label()),
-        None => GUIDE[progress.step].title.to_string(),
+        None => initial_order.guide()[progress.step].title.to_string(),
     });
     let timer_announcement = RwSignal::new(String::new());
     let running = RwSignal::new(false);
@@ -119,22 +130,24 @@ pub fn App() -> impl IntoView {
     // Advancing the walk updates speech, timer and sheet in place:
     // it must never scroll/jump the page under the judge.
     let set_step = Callback::new(move |next: usize| {
-        let next = next.min(GUIDE.len() - 1);
+        let guide_now = guide.get_untracked();
+        let next = next.min(guide_now.len() - 1);
         step.set(next);
         stop_timer();
-        let full = (GUIDE[next].minutes * 60) as i32;
+        let full = (guide_now[next].minutes * 60) as i32;
         timer_bank.update(|b| {
             b.start_speech(full);
         });
         timer_secs.set(full);
-        timer_label.set(GUIDE[next].title.to_string());
+        timer_label.set(guide_now[next].title.to_string());
         timer_announcement.set(String::new());
         // Rebuttals answer the opponent's case, so they are written on the
         // opponent's sheet; every other speech writes on the speaker's sheet.
-        let sheet = match GUIDE[next].flow_col {
+        // `flow_col` is canonical, so 2/3 are Pro/Con Rebuttal in any order.
+        let sheet = match guide_now[next].flow_col {
             Some(2) => Some(Side::Con),
             Some(3) => Some(Side::Pro),
-            _ => GUIDE[next].side,
+            _ => guide_now[next].side,
         };
         if let Some(side) = sheet {
             tab.set(side);
@@ -145,7 +158,11 @@ pub fn App() -> impl IntoView {
     // column. Crossfire steps have no column, so they stay reachable
     // only via Prev/Next, exactly as before.
     let on_speech_click = Callback::new(move |col: usize| {
-        if let Some(i) = GUIDE.iter().position(|g| g.flow_col == Some(col)) {
+        if let Some(i) = guide
+            .get_untracked()
+            .iter()
+            .position(|g| g.flow_col == Some(col))
+        {
             set_step.run(i);
         }
     });
@@ -222,13 +239,17 @@ pub fn App() -> impl IntoView {
             });
             timer_secs.set(speech_secs);
         } else {
-            let full = (GUIDE[step.get_untracked()].minutes * 60).cast_signed();
+            let full = (guide.get_untracked()[step.get_untracked()].minutes * 60).cast_signed();
             timer_bank.update(|b| {
                 b.start_speech(full);
             });
             timer_secs.set(full);
         }
-        timer_label.set(GUIDE[step.get_untracked()].title.to_string());
+        timer_label.set(
+            guide.get_untracked()[step.get_untracked()]
+                .title
+                .to_string(),
+        );
         timer_announcement.set(String::new());
         persist_progress.run(());
     };
@@ -240,10 +261,11 @@ pub fn App() -> impl IntoView {
     let st_clear = state.clone();
     let st_export = state.clone();
     let st_topic = state.clone();
+    let st_order = state.clone();
     // Issue #20: a derived signal, not a plain value snapshot, so step
     // changes update only the `cell-now`/`fh-now` class bindings in the
     // already-mounted sheets instead of rebuilding every row/textarea.
-    let current_col = Signal::derive(move || GUIDE[step.get()].flow_col);
+    let current_col = Signal::derive(move || guide.get()[step.get()].flow_col);
 
     view! {
         <div class="page">
@@ -351,19 +373,42 @@ pub fn App() -> impl IntoView {
                             prop:value=move || state.con_team.get()
                             on:input={let s = state.clone(); move |ev| { s.con_team.set(event_target_value(&ev)); save(&s); }} />
                     </label>
+                    <label class="focus-toggle order-toggle no-print">
+                        <input type="checkbox" prop:checked=move || speaking_order.get() == SpeakingOrder::ConFirst
+                            on:change={let s = st_order.clone(); move |ev| {
+                                let order = if event_target_checked(&ev) { SpeakingOrder::ConFirst } else { SpeakingOrder::ProFirst };
+                                s.speaking_order.set(order);
+                                save(&s);
+                                // The step is a speaking position, so it
+                                // stays put; re-point the sheet and speech
+                                // label at that step in the new order.
+                                if !matches!(timer_bank.get_untracked().active(), TimerKind::Prep(_)) {
+                                    let g = order.guide()[step.get_untracked()];
+                                    timer_label.set(g.title.to_string());
+                                    let sheet = match g.flow_col {
+                                        Some(2) => Some(Side::Con),
+                                        Some(3) => Some(Side::Pro),
+                                        _ => g.side,
+                                    };
+                                    if let Some(side) = sheet { tab.set(side); }
+                                }
+                                persist_progress.run(());
+                            }} />
+                        <span><b>"Con speaks first"</b> " — the coin flip gave Con the opening speech. Columns, guide and timers follow that order; notes already written stay under their own speech."</span>
+                    </label>
                 </div>
 
                     <div class="bubble-wrap no-print">
                         <div class="bubble">
                             <p class="bubble-title">
-                                {move || GUIDE[step.get()].title}
-                                <span class="bubble-time">{move || format!(" · {} min", GUIDE[step.get()].minutes)}</span>
+                                {move || guide.get()[step.get()].title}
+                                <span class="bubble-time">{move || format!(" · {} min", guide.get()[step.get()].minutes)}</span>
                             </p>
-                            <p class="bubble-main">{move || GUIDE[step.get()].bubble}</p>
+                            <p class="bubble-main">{move || guide.get()[step.get()].bubble}</p>
                             <ul class="bubble-list">
-                                <li><b>"Listen for: "</b>{move || GUIDE[step.get()].listen_for}</li>
-                                <li><b>"Write: "</b>{move || GUIDE[step.get()].do_it}</li>
-                                <li><b>"Watch out: "</b>{move || GUIDE[step.get()].watch_out}</li>
+                                <li><b>"Listen for: "</b>{move || guide.get()[step.get()].listen_for}</li>
+                                <li><b>"Write: "</b>{move || guide.get()[step.get()].do_it}</li>
+                                <li><b>"Watch out: "</b>{move || guide.get()[step.get()].watch_out}</li>
                             </ul>
                         </div>
                     </div>
@@ -404,7 +449,7 @@ pub fn App() -> impl IntoView {
                         <div class="step-nav">
                             <button class="btn btn-soft" disabled={move || step.get() == 0}
                                 on:click=move |_| set_step.run(step.get_untracked().saturating_sub(1))>"⬅ Prev speech"</button>
-                            <button class="btn btn-main" disabled={move || step.get() >= GUIDE.len() - 1}
+                            <button class="btn btn-main" disabled={move || step.get() >= guide.get().len() - 1}
                                 on:click=move |_| set_step.run(step.get_untracked() + 1)>"Next speech ➜"</button>
                         </div>
                     </div>
@@ -443,10 +488,10 @@ pub fn App() -> impl IntoView {
                 // visibility. Rebuilding on tab/step used to destroy every
                 // textarea (focus, caret, undo history, scroll position).
                 <div class:sheet-hidden=move || tab.get() != Side::Pro>
-                    <FlowSheet state=st_flow.clone() side=Side::Pro current_col=Some(current_col) focus_mode=focus_mode insert_ctx=Some(insert_ctx) on_speech_click=Some(on_speech_click) />
+                    <FlowSheet state=st_flow.clone() side=Side::Pro speaking_order=speaking_order current_col=Some(current_col) focus_mode=focus_mode insert_ctx=Some(insert_ctx) on_speech_click=Some(on_speech_click) />
                 </div>
                 <div class:sheet-hidden=move || tab.get() != Side::Con>
-                    <FlowSheet state=st_flow.clone() side=Side::Con current_col=Some(current_col) focus_mode=focus_mode insert_ctx=Some(insert_ctx) on_speech_click=Some(on_speech_click) />
+                    <FlowSheet state=st_flow.clone() side=Side::Con speaking_order=speaking_order current_col=Some(current_col) focus_mode=focus_mode insert_ctx=Some(insert_ctx) on_speech_click=Some(on_speech_click) />
                 </div>
 
                 <details class="shorthand no-print">
@@ -471,9 +516,9 @@ pub fn App() -> impl IntoView {
             // Print-only: both sheets, like the two paper pages.
             <section class="card print-only">
                 <h2>"Pro flow"</h2>
-                <FlowSheet state=st_flow.clone() side=Side::Pro current_col=None focus_mode=focus_mode insert_ctx=None on_speech_click=None />
+                <FlowSheet state=st_flow.clone() side=Side::Pro speaking_order=speaking_order current_col=None focus_mode=focus_mode insert_ctx=None on_speech_click=None />
                 <h2 style="margin-top:20px">"Con flow"</h2>
-                <FlowSheet state=st_flow.clone() side=Side::Con current_col=None focus_mode=focus_mode insert_ctx=None on_speech_click=None />
+                <FlowSheet state=st_flow.clone() side=Side::Con speaking_order=speaking_order current_col=None focus_mode=focus_mode insert_ctx=None on_speech_click=None />
             </section>
 
             // ---------- Crossfire notes ----------
@@ -599,6 +644,7 @@ fn DroppedHints(state: RoundState, step: RwSignal<usize>) -> impl IntoView {
 fn FlowSheet(
     state: RoundState,
     side: Side,
+    speaking_order: Signal<SpeakingOrder>,
     current_col: Option<Signal<Option<usize>>>,
     focus_mode: RwSignal<bool>,
     insert_ctx: Option<InsertCtx>,
@@ -617,7 +663,8 @@ fn FlowSheet(
                         {format!("{} arguments ↓", side.label())}
                         <span class="fh-sub">"one row = one argument"</span>
                     </div>
-                    {SPEECH_COLS.iter().enumerate().map(|(col, sc)| {
+                    {move || speaking_order.get().column_order().into_iter().enumerate().map(|(pos, col)| {
+                        let sc = SPEECH_COLS[col];
                         let is_now = move || current_col.is_some_and(|signal| signal.get() == Some(col));
                         let dim = move || {
                             focus_mode.get()
@@ -630,7 +677,7 @@ fn FlowSheet(
                                     aria-current=move || is_now().then_some("step")
                                     title=format!("Go to {}", sc.full)
                                     on:click=move |_| on_click.run(col)>
-                                    {if col > 0 { Some(view! { <span class="fh-arrow" aria-hidden="true">"➜"</span> }) } else { None }}
+                                    {if pos > 0 { Some(view! { <span class="fh-arrow" aria-hidden="true">"➜"</span> }) } else { None }}
                                     {move || is_now().then(|| view! { <span class="fh-badge">"✏️ you are here"</span> })}
                                     <span class="fh-name">{sc.full}</span>
                                     <span class="fh-sub">{format!("{} min", sc.minutes)}</span>
@@ -647,7 +694,7 @@ fn FlowSheet(
                     }).collect_view()}
 
                     {let s = state.clone(); move || rows.get().into_iter().enumerate().map(|(idx, row)| {
-                        view! { <FlowRow state=s.clone() side=side row=row row_index=idx + 1 current_col=current_col focus_mode=focus_mode insert_ctx=insert_ctx /> }
+                        view! { <FlowRow state=s.clone() side=side row=row row_index=idx + 1 speaking_order=speaking_order current_col=current_col focus_mode=focus_mode insert_ctx=insert_ctx /> }
                     }).collect_view()}
                 </div>
             </div>
@@ -670,6 +717,7 @@ fn FlowRow(
     side: Side,
     row: RowState,
     row_index: usize,
+    speaking_order: Signal<SpeakingOrder>,
     current_col: Option<Signal<Option<usize>>>,
     focus_mode: RwSignal<bool>,
     insert_ctx: Option<InsertCtx>,
@@ -724,8 +772,9 @@ fn FlowRow(
                 })}}
             </div>
         </div>
-        {row.cells.iter().enumerate().map(|(col, cell)| {
-            let cell = *cell;
+        {let r = row.clone(); move || speaking_order.get().column_order().into_iter().enumerate().map(|(pos, col)| {
+            let cell = r.cells[col];
+            let row = r.clone();
             let is_now = move || current_col.is_some_and(|signal| signal.get() == Some(col));
             let dim = move || {
                 focus_mode.get()
@@ -741,7 +790,7 @@ fn FlowRow(
                     class:cell-dropped=move || cell.mark.get() == Mark::Dropped
                     class:cell-extended=move || cell.mark.get() == Mark::Extended
                     class:cell-key=move || cell.mark.get() == Mark::Key>
-                    {if col > 0 {
+                    {if pos > 0 {
                         Some(view! { <span class="cell-arrow" aria-hidden="true">"➜"</span> })
                     } else { None }}
                     <textarea rows="3" id=cell_id placeholder=placeholder aria-label=move || { let title = title_signal.get(); let title = title.trim(); if title.is_empty() { format!("{}, {} argument {}", SPEECH_COLS[col].full, side.label(), row_index) } else { format!("{}, {} argument {}: {}", SPEECH_COLS[col].full, side.label(), row_index, title) } }

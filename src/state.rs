@@ -75,6 +75,7 @@ pub struct RoundState {
     pub topic: RwSignal<String>,
     pub pro_team: RwSignal<String>,
     pub con_team: RwSignal<String>,
+    pub speaking_order: RwSignal<SpeakingOrder>,
     pub pro_rows: RwSignal<Vec<RowState>>,
     pub con_rows: RwSignal<Vec<RowState>>,
     pub crossfire_notes: RwSignal<String>,
@@ -99,6 +100,7 @@ impl RoundState {
             topic: RwSignal::new(data.topic),
             pro_team: RwSignal::new(data.pro_team),
             con_team: RwSignal::new(data.con_team),
+            speaking_order: RwSignal::new(data.speaking_order),
             pro_rows: RwSignal::new(data.pro_rows.iter().map(RowState::from_data).collect()),
             con_rows: RwSignal::new(data.con_rows.iter().map(RowState::from_data).collect()),
             crossfire_notes: RwSignal::new(data.crossfire_notes),
@@ -115,6 +117,7 @@ impl RoundState {
             topic: self.topic.get_untracked(),
             pro_team: self.pro_team.get_untracked(),
             con_team: self.con_team.get_untracked(),
+            speaking_order: self.speaking_order.get_untracked(),
             pro_rows: self
                 .pro_rows
                 .get_untracked()
@@ -142,6 +145,7 @@ impl RoundState {
             topic: self.topic.get(),
             pro_team: self.pro_team.get(),
             con_team: self.con_team.get(),
+            speaking_order: self.speaking_order.get(),
             pro_rows: self
                 .pro_rows
                 .get()
@@ -176,6 +180,8 @@ impl RoundState {
         self.topic.set(fresh.topic.get_untracked());
         self.pro_team.set(fresh.pro_team.get_untracked());
         self.con_team.set(fresh.con_team.get_untracked());
+        self.speaking_order
+            .set(fresh.speaking_order.get_untracked());
         self.pro_rows.set(fresh.pro_rows.get_untracked());
         self.con_rows.set(fresh.con_rows.get_untracked());
         self.crossfire_notes

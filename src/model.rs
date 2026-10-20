@@ -20,6 +20,13 @@ impl Side {
             Side::Con => "Con",
         }
     }
+
+    pub fn other(self) -> Self {
+        match self {
+            Side::Pro => Side::Con,
+            Side::Con => Side::Pro,
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize, Default)]
@@ -46,6 +53,7 @@ impl Mark {
 }
 
 /// The 8 speeches that get flowed, left → right. Crossfires are not flowed.
+#[derive(Clone, Copy)]
 pub struct SpeechCol {
     pub full: &'static str,
     pub side: Side,
@@ -96,6 +104,7 @@ pub const SPEECH_COLS: [SpeechCol; 8] = [
 ];
 
 /// One step of the guided walk through the whole round (includes crossfires).
+#[derive(Clone, Copy)]
 pub struct GuideStep {
     pub title: &'static str,
     pub side: Option<Side>,
@@ -222,6 +231,94 @@ pub const GUIDE: [GuideStep; 11] = [
     },
 ];
 
+/// Who speaks first (issue #21). NSDA PF decides this by coin flip, so
+/// the speaking sequence cannot be hard-coded Pro-first.
+///
+/// Storage invariant: a row's cells are always indexed by speech
+/// identity (`SPEECH_COLS`: Pro Constructive is column 0 whatever the
+/// order), never by speaking position. This order only changes the
+/// sequence columns and guide steps are presented in, so flipping it
+/// can never scramble notes already written under a speech.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize, Default)]
+pub enum SpeakingOrder {
+    #[default]
+    ProFirst,
+    ConFirst,
+}
+
+impl SpeakingOrder {
+    /// Canonical `SPEECH_COLS` indices in speaking order: pairs swap
+    /// (Constructives, Rebuttals, Summaries, Final Focuses).
+    #[must_use]
+    pub fn column_order(self) -> [usize; SPEECH_COLS.len()] {
+        match self {
+            Self::ProFirst => [0, 1, 2, 3, 4, 5, 6, 7],
+            Self::ConFirst => [1, 0, 3, 2, 5, 4, 7, 6],
+        }
+    }
+
+    /// Speaking position (0 = first speech) of a canonical column.
+    #[must_use]
+    pub fn position_of(self, col: usize) -> Option<usize> {
+        self.column_order().iter().position(|&c| c == col)
+    }
+
+    /// Canonical column where `owner`'s case is first written: that
+    /// side's Constructive, whichever speech of the round it is.
+    #[must_use]
+    pub fn origin_col(owner: Side) -> usize {
+        SPEECH_COLS
+            .iter()
+            .position(|s| s.side == owner)
+            .unwrap_or(0)
+    }
+
+    /// Canonical column of `answerer`'s Rebuttal: that side's second
+    /// speech in `SPEECH_COLS`.
+    #[must_use]
+    pub fn rebuttal_col(answerer: Side) -> usize {
+        SPEECH_COLS
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| s.side == answerer)
+            .nth(1)
+            .map_or(0, |(col, _)| col)
+    }
+
+    /// The guided walk in speaking order. Steps keep their canonical
+    /// `flow_col`; only their sequence (and order-sensitive bubble
+    /// wording such as “first speech” / “last speech”) changes.
+    #[must_use]
+    pub fn guide(self) -> [GuideStep; GUIDE.len()] {
+        match self {
+            Self::ProFirst => GUIDE,
+            Self::ConFirst => {
+                let mut guide = [
+                    GUIDE[1], GUIDE[0], GUIDE[2], GUIDE[4], GUIDE[3], GUIDE[5], GUIDE[7], GUIDE[6],
+                    GUIDE[8], GUIDE[10], GUIDE[9],
+                ];
+                guide[0].bubble =
+                    "First speech! Just catch the big ideas — nobody flows every word. ♡";
+                guide[0].listen_for =
+                    "“Our first contention is…” — each contention is a new row on the Con sheet.";
+                guide[0].do_it = "Start one row per contention. Write 3–6 words: the claim + why it matters (the “impact”).";
+                guide[1].bubble =
+                    "Flip to the Pro sheet — their case gets its own page, just like paper!";
+                guide[3].bubble = "Now they answer each other! Write answers in the box directly RIGHT of the argument. ➜";
+                guide[4].bubble = "Same thing, other direction — Pro answers Con on the Con sheet. You’ve got this!";
+                guide[6].bubble = "Summaries = “extend” time. If they carry an argument forward, draw your arrow ➜!";
+                guide[7].bubble = "Pro does the same — which of their arguments survive?";
+                guide[9].bubble =
+                    "Final Focus = “judge, vote for us because…”. Listen for weighing! ⚖️";
+                guide[9].listen_for = "Con's #1 reason + weighing words: bigger, sooner, more likely, “even if they win…”";
+                guide[10].bubble =
+                    "Last speech! After this, the ballot below walks you through deciding.";
+                guide
+            }
+        }
+    }
+}
+
 /// `#[serde(default)]`: a save missing a field loads with that field
 /// defaulted instead of failing the whole round (see `RoundData::normalised`).
 #[derive(Clone, Serialize, Deserialize, Default)]
@@ -266,6 +363,9 @@ pub struct RoundData {
     pub topic: String,
     pub pro_team: String,
     pub con_team: String,
+    /// Coin-flip speaking order; absent in older saves, which were
+    /// necessarily Pro-first, so the serde default is correct for them.
+    pub speaking_order: SpeakingOrder,
     pub pro_rows: Vec<RowData>,
     pub con_rows: Vec<RowData>,
     pub crossfire_notes: String,
@@ -280,6 +380,7 @@ impl Default for RoundData {
             topic: String::new(),
             pro_team: String::new(),
             con_team: String::new(),
+            speaking_order: SpeakingOrder::ProFirst,
             pro_rows: vec![RowData::new(1, ""), RowData::new(2, "")],
             con_rows: vec![RowData::new(3, ""), RowData::new(4, "")],
             crossfire_notes: String::new(),
@@ -407,7 +508,7 @@ impl RoundData {
     }
 
     /// Arguments that look dropped at guide step `guide_step` (an index
-    /// into `GUIDE`). Pure so the ballot hints can be unit-tested and the
+    /// into this round's `SpeakingOrder::guide`). Pure so the ballot hints can be unit-tested and the
     /// view only has to feed it a tracked snapshot.
     ///
     /// Inferred drop: opponent's rebuttal is already over and *every*
@@ -418,22 +519,24 @@ impl RoundData {
     /// because the judge — not the text heuristic — decided it.
     #[must_use]
     pub fn dropped_arguments(&self, guide_step: usize) -> Vec<DroppedArgument> {
-        // Highest flow column whose speech ended before the current step.
-        let completed = GUIDE
+        // Guide steps that ended before the current step, in this
+        // round's speaking order (issue #21).
+        let order = self.speaking_order;
+        let guide = order.guide();
+        let completed: Vec<usize> = guide
             .iter()
-            .take(guide_step.min(GUIDE.len()))
+            .take(guide_step.min(guide.len()))
             .filter_map(|g| g.flow_col)
-            .max();
+            .collect();
         let mut dropped = Vec::new();
-        // (rows, owner, origin column, opponent's rebuttal column)
-        for (rows, owner, origin_col, rebuttal_col) in [
-            (&self.pro_rows, Side::Pro, 0usize, 3usize),
-            (&self.con_rows, Side::Con, 1usize, 2usize),
-        ] {
-            let answerer = match owner {
-                Side::Pro => Side::Con,
-                Side::Con => Side::Pro,
-            };
+        for (rows, owner) in [(&self.pro_rows, Side::Pro), (&self.con_rows, Side::Con)] {
+            let answerer = owner.other();
+            // Derived, not hard-coded to Pro-first constants: the
+            // owner's Constructive is its origin, and the gate is the
+            // answerer's Rebuttal having ended in this order.
+            let origin_col = SpeakingOrder::origin_col(owner);
+            let rebuttal_col = SpeakingOrder::rebuttal_col(answerer);
+            let origin_pos = order.position_of(origin_col).unwrap_or(0);
             for row in rows {
                 let has_mark = |mark: Mark| row.cells.iter().any(|c| c.mark == mark);
                 let explicit = has_mark(Mark::Dropped);
@@ -450,18 +553,21 @@ impl RoundData {
                     });
                     continue;
                 }
-                // Inferred only: this side has not had its rebuttal yet.
-                if completed.is_none_or(|done| rebuttal_col > done) {
+                // Inferred only: the answerer has not had its rebuttal yet.
+                if !completed.contains(&rebuttal_col) {
                     continue;
                 }
                 let origin = row.cells.get(origin_col).map_or("", |c| c.text.trim());
                 if origin.is_empty() {
                     continue;
                 }
-                // Any opponent box counts, even in the speech happening
-                // now: text there means the answer was given.
+                // Any opponent box in a later speech counts, even in
+                // the speech happening now: text there means the answer
+                // was given. “Later” is speaking position, not canonical
+                // column — when Con speaks first, Pro's Constructive
+                // (canonical 0) answers Con's (canonical 1).
                 let has_answer = row.cells.iter().enumerate().any(|(col, cell)| {
-                    col > origin_col
+                    order.position_of(col).is_some_and(|pos| pos > origin_pos)
                         && SPEECH_COLS.get(col).is_some_and(|s| s.side == answerer)
                         && !cell.text.trim().is_empty()
                 });
@@ -488,10 +594,8 @@ impl RoundData {
             return Vec::new();
         }
         let mut marked = Vec::new();
-        for (rows, owner, origin_col) in [
-            (&self.pro_rows, Side::Pro, 0usize),
-            (&self.con_rows, Side::Con, 1usize),
-        ] {
+        for (rows, owner) in [(&self.pro_rows, Side::Pro), (&self.con_rows, Side::Con)] {
+            let origin_col = SpeakingOrder::origin_col(owner);
             for row in rows {
                 if let Some(speech) = row
                     .cells
@@ -660,6 +764,7 @@ mod tests {
             "topic",
             "pro_team",
             "con_team",
+            "speaking_order",
             "pro_rows",
             "con_rows",
             "crossfire_notes",
@@ -895,6 +1000,114 @@ mod tests {
         assert!(!dropped[0].explicit);
         assert!(dropped[0].extended);
         assert!(dropped[0].key);
+    }
+
+    #[test]
+    fn con_first_swaps_speech_pairs_and_guide_but_keeps_canonical_cols() {
+        let order = SpeakingOrder::ConFirst;
+        assert_eq!(order.column_order(), [1, 0, 3, 2, 5, 4, 7, 6]);
+        assert_eq!(SPEECH_COLS[order.column_order()[0]].side, Side::Con);
+        let titles: Vec<&str> = order
+            .column_order()
+            .iter()
+            .map(|&col| SPEECH_COLS[col].full)
+            .collect();
+        assert_eq!(titles[0], "Con Constructive");
+        assert_eq!(titles[1], "Pro Constructive");
+        assert_eq!(titles[7], "Pro Final Focus");
+        let guide = order.guide();
+        let walked: Vec<&str> = guide.iter().map(|g| g.title).collect();
+        assert_eq!(walked[0], "Con Constructive");
+        assert_eq!(walked[1], "Pro Constructive");
+        assert_eq!(walked[3], "Con Rebuttal");
+        assert_eq!(walked[4], "Pro Rebuttal");
+        assert_eq!(walked[10], "Pro Final Focus");
+        // Canonical flow columns travel with their speech.
+        assert_eq!(guide[0].flow_col, Some(1));
+        assert_eq!(guide[1].flow_col, Some(0));
+        assert_eq!(guide[10].flow_col, Some(6));
+        // Order-sensitive wording follows the new first/last speeches.
+        assert!(guide[0].bubble.contains("First speech"));
+        assert!(guide[10].bubble.contains("Last speech"));
+        assert_eq!(SpeakingOrder::default(), SpeakingOrder::ProFirst);
+        assert_eq!(GUIDE[0].title, "Pro Constructive");
+    }
+
+    #[test]
+    fn speaking_order_persists_and_old_saves_default_to_pro_first() {
+        let round = RoundData {
+            speaking_order: SpeakingOrder::ConFirst,
+            ..RoundData::default()
+        };
+        let json = serde_json::to_string(&round).unwrap_or_default();
+        let Ok(loaded) = RoundData::from_saved_json(&json) else {
+            panic!("round with speaking order must reload");
+        };
+        assert_eq!(loaded.speaking_order, SpeakingOrder::ConFirst);
+        // A pre-#21 save has no field at all: it was Pro-first by force.
+        let Ok(old) = RoundData::from_saved_json(r#"{"topic":"T"}"#) else {
+            panic!("old save must load");
+        };
+        assert_eq!(old.speaking_order, SpeakingOrder::ProFirst);
+        assert_eq!(old.topic, "T");
+    }
+
+    fn con_first_round(pro_answer: Option<usize>, con_answer: Option<usize>) -> RoundData {
+        let mut pro = RowData::new(1, "C1: Oceans");
+        pro.cells[0].text = "Plastic harms oceans".to_owned();
+        if let Some(col) = pro_answer {
+            pro.cells[col].text = "an answer".to_owned();
+        }
+        let mut con = RowData::new(2, "C1: Economy");
+        con.cells[1].text = "Ban costs small shops".to_owned();
+        if let Some(col) = con_answer {
+            con.cells[col].text = "an answer".to_owned();
+        }
+        RoundData {
+            speaking_order: SpeakingOrder::ConFirst,
+            pro_rows: vec![pro],
+            con_rows: vec![con],
+            ..RoundData::default()
+        }
+    }
+
+    #[test]
+    fn con_first_dropped_arguments_follow_speaking_order() {
+        // Con Rebuttal is guide step 3, Pro Rebuttal step 4 (Con-first).
+        for step in [0, 3] {
+            assert!(
+                con_first_round(None, None)
+                    .dropped_arguments(step)
+                    .iter()
+                    .all(|d| d.owner != Side::Pro),
+                "Pro flagged at step {step}, before Con Rebuttal ended"
+            );
+        }
+        for step in [0, 4] {
+            assert!(
+                con_first_round(None, None)
+                    .dropped_arguments(step)
+                    .iter()
+                    .all(|d| d.owner != Side::Con),
+                "Con flagged at step {step}, before Pro Rebuttal ended"
+            );
+        }
+        let dropped = con_first_round(None, None).dropped_arguments(5);
+        assert_eq!(dropped.len(), 2);
+        // Pro's Constructive (canonical 0) speaks after Con's, so it can
+        // answer Con — the old canonical `col > origin` check missed it.
+        assert!(
+            con_first_round(None, Some(0))
+                .dropped_arguments(10)
+                .iter()
+                .all(|d| d.owner != Side::Con)
+        );
+        // Con's Constructive speaks before Pro's, so text there is
+        // Con's own case, not an answer to Pro: Pro is still dropped.
+        assert_eq!(
+            con_first_round(Some(1), None).dropped_arguments(10).len(),
+            2
+        );
     }
 
     #[test]
