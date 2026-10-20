@@ -55,6 +55,11 @@ jobs:
       - name: SPA fallback for Pages
         run: cp dist/index.html dist/404.html
 
+      # Custom domain (flower.devfire.io -> devfire.github.io CNAME in Route 53).
+      # Without this in the artifact, deploys would drop the Pages custom domain.
+      - name: Custom domain
+        run: echo "flower.devfire.io" > dist/CNAME
+
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
