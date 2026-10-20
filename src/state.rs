@@ -433,10 +433,16 @@ pub fn print_page() {
     }
 }
 
-pub fn copy_text(text: &str) {
-    if let Some(w) = web_sys::window() {
-        let _ = w.navigator().clipboard().write_text(text);
-    }
+/// Copy `text` to the clipboard; `true` only when the browser confirms
+/// the write, so the UI can show ✓ or an error instead of guessing
+/// (the promise rejection — blocked permission, unfocused document —
+/// was previously swallowed).
+pub async fn copy_text(text: &str) -> bool {
+    let Some(window) = web_sys::window() else {
+        return false;
+    };
+    let promise = window.navigator().clipboard().write_text(text);
+    wasm_bindgen_futures::JsFuture::from(promise).await.is_ok()
 }
 
 /// Monotonic clock (ms) for the speech timer deadline. `performance.now()`

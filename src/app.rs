@@ -76,6 +76,7 @@ pub fn App() -> impl IntoView {
     });
     let timer_announcement = RwSignal::new(String::new());
     let running = RwSignal::new(false);
+    let copy_feedback = RwSignal::new(None::<&'static str>);
     let interval = StoredValue::new_local(None::<Interval>);
     // Wall-clock deadline (performance.now ms) the running timer counts to.
     // Remaining time is derived from it on every tick, so background-tab
@@ -508,7 +509,17 @@ pub fn App() -> impl IntoView {
                     <div class="notes-print" aria-hidden="true">{move || state.rfd.get()}</div>
                 </label>
                 <div class="ballot-actions no-print">
-                    <button class="btn btn-main" on:click=move |_| copy_text(&decision_text(&st_export))>"📋 Copy decision summary"</button>
+                    <button class="btn btn-main" on:click=move |_| {
+                        let text = decision_text(&st_export);
+                        spawn_local(async move {
+                            copy_feedback.set(Some(if copy_text(&text).await {
+                                "Copied ✓"
+                            } else {
+                                "⚠️ Copy failed — clipboard blocked by the browser"
+                            }));
+                        });
+                    }>"📋 Copy decision summary"</button>
+                    <span class="copy-feedback" role="status" aria-live="polite">{move || copy_feedback.get().unwrap_or("")}</span>
                     <button class="btn btn-soft" on:click=move |_| print_page()>"🖨️ Print flow + ballot"</button>
                 </div>
             </section>
@@ -523,34 +534,44 @@ pub fn App() -> impl IntoView {
 }
 
 fn decision_text(state: &RoundState) -> String {
-    let d = state.snapshot();
-    let winner = if d.winner.is_empty() {
-        "—".to_string()
-    } else {
-        d.winner.clone()
-    };
-    format!(
-        "Flower — PF decision\nTopic: {}\nPro: {} · Con: {}\nWinner: {}\nReason: {}",
-        d.topic, d.pro_team, d.con_team, winner, d.rfd
-    )
+    state.snapshot().decision_text()
 }
 
 #[component]
 fn DroppedHints(state: RoundState, step: RwSignal<usize>) -> impl IntoView {
     // Tracked snapshot + the guide step: hints re-derive live as the
-    // judge types, and nothing is flagged before its rebuttal is over.
+    // judge types or taps a mark, and inferred drops are not flagged
+    // before their rebuttal is over (explicit 💤 marks are immediate).
     move || {
         let hints: Vec<String> = state
             .snapshot_tracked()
             .dropped_arguments(step.get())
             .into_iter()
             .map(|d| {
-                format!(
-                    "💤 {}'s “{}” got no {} answer in any speech so far — if it was extended, it may decide the round.",
-                    d.owner.label(),
-                    d.name,
-                    d.answerer.label()
-                )
+                let mut hint = if d.explicit {
+                    format!(
+                        "💤 {}'s “{}” — you marked this dropped; no {} answer counts against it.",
+                        d.owner.label(),
+                        d.name,
+                        d.answerer.label()
+                    )
+                } else {
+                    format!(
+                        "💤 {}'s “{}” got no {} answer in any speech so far",
+                        d.owner.label(),
+                        d.name,
+                        d.answerer.label()
+                    )
+                };
+                if d.extended {
+                    hint.push_str(" ➜ It was extended — that can decide the round.");
+                } else if !d.explicit {
+                    hint.push_str(" — if it was extended, it may decide the round.");
+                }
+                if d.key {
+                    hint.push_str(" ⭐ You starred it as key.");
+                }
+                hint
             })
             .collect();
         if hints.is_empty() {
@@ -558,7 +579,7 @@ fn DroppedHints(state: RoundState, step: RwSignal<usize>) -> impl IntoView {
         } else {
             view! {
                 <div class="dropped-box">
-                    <p class="dropped-title">"🔎 Arguments that look dropped (blank answer box):"</p>
+                    <p class="dropped-title">"🔎 Arguments that look dropped (blank answer box or 💤 mark):"</p>
                     <ul>{hints.into_iter().map(|h| view! { <li>{h}</li> }).collect_view()}</ul>
                 </div>
             }.into_any()

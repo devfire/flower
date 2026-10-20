@@ -291,13 +291,50 @@ impl Default for RoundData {
 }
 
 /// An argument the opponent had a fair chance to answer — their rebuttal
-/// speech is over — yet every opponent answer box on its row is blank.
+/// speech is over — yet every opponent answer box on its row is blank,
+/// or one the judge explicitly marked 💤 dropped.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct DroppedArgument {
     pub owner: Side,
     pub answerer: Side,
     /// Row title if the judge gave one, else the argument's own text.
     pub name: String,
+    /// Judge tapped 💤 on this row: surface it even if an answer box has
+    /// text (the judge judged it not an answer) or rebuttal is not over.
+    pub explicit: bool,
+    /// Any cell on the row is marked ➜ extended.
+    pub extended: bool,
+    /// Any cell on the row is marked ⭐ key.
+    pub key: bool,
+}
+
+/// A row carrying a judge-placed mark, for the decision summary.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct MarkedArgument {
+    pub owner: Side,
+    /// Row title if given, else the argument's own text.
+    pub name: String,
+    /// Speech (`SPEECH_COLS` full name) of the first cell with the mark.
+    pub speech: &'static str,
+}
+
+fn row_display_name(row: &RowData, origin_col: usize) -> String {
+    let title = row.title.trim();
+    if !title.is_empty() {
+        return title.to_owned();
+    }
+    if let Some(origin) = row.cells.get(origin_col)
+        && !origin.text.trim().is_empty()
+    {
+        return origin.text.trim().to_owned();
+    }
+    row.cells
+        .iter()
+        .find(|c| !c.text.trim().is_empty())
+        .map_or_else(
+            || "Unnamed argument".to_owned(),
+            |c| c.text.trim().to_owned(),
+        )
 }
 
 impl RoundData {
@@ -373,11 +410,12 @@ impl RoundData {
     /// into `GUIDE`). Pure so the ballot hints can be unit-tested and the
     /// view only has to feed it a tracked snapshot.
     ///
-    /// A row is dropped only when the opponent's rebuttal speech is
-    /// already over (a blank box mid-round is expected, not a signal) and
-    /// *every* opponent-speech box on the row up to the last finished
-    /// speech is blank — an answer in Constructive, Summary, or Final
-    /// Focus counts just as much as one in Rebuttal.
+    /// Inferred drop: opponent's rebuttal is already over and *every*
+    /// opponent-speech box on the row is blank — an answer in
+    /// Constructive, Summary, or Final Focus counts just as much as one
+    /// in Rebuttal. Explicit drop: the judge marked a cell 💤; that is
+    /// surfaced immediately, rebuttal gate and answer text notwithstanding,
+    /// because the judge — not the text heuristic — decided it.
     #[must_use]
     pub fn dropped_arguments(&self, guide_step: usize) -> Vec<DroppedArgument> {
         // Highest flow column whose speech ended before the current step.
@@ -386,24 +424,36 @@ impl RoundData {
             .take(guide_step.min(GUIDE.len()))
             .filter_map(|g| g.flow_col)
             .max();
-        let Some(completed) = completed else {
-            return Vec::new();
-        };
         let mut dropped = Vec::new();
         // (rows, owner, origin column, opponent's rebuttal column)
         for (rows, owner, origin_col, rebuttal_col) in [
             (&self.pro_rows, Side::Pro, 0usize, 3usize),
             (&self.con_rows, Side::Con, 1usize, 2usize),
         ] {
-            // This side has not had its rebuttal yet: never flag.
-            if rebuttal_col > completed {
-                continue;
-            }
             let answerer = match owner {
                 Side::Pro => Side::Con,
                 Side::Con => Side::Pro,
             };
             for row in rows {
+                let has_mark = |mark: Mark| row.cells.iter().any(|c| c.mark == mark);
+                let explicit = has_mark(Mark::Dropped);
+                let extended = has_mark(Mark::Extended);
+                let key = has_mark(Mark::Key);
+                if explicit {
+                    dropped.push(DroppedArgument {
+                        owner,
+                        answerer,
+                        name: row_display_name(row, origin_col),
+                        explicit: true,
+                        extended,
+                        key,
+                    });
+                    continue;
+                }
+                // Inferred only: this side has not had its rebuttal yet.
+                if completed.is_none_or(|done| rebuttal_col > done) {
+                    continue;
+                }
                 let origin = row.cells.get(origin_col).map_or("", |c| c.text.trim());
                 if origin.is_empty() {
                     continue;
@@ -416,20 +466,87 @@ impl RoundData {
                         && !cell.text.trim().is_empty()
                 });
                 if !has_answer {
-                    let title = row.title.trim();
                     dropped.push(DroppedArgument {
                         owner,
                         answerer,
-                        name: if title.is_empty() {
-                            origin.to_owned()
-                        } else {
-                            title.to_owned()
-                        },
+                        name: row_display_name(row, origin_col),
+                        explicit: false,
+                        extended,
+                        key,
                     });
                 }
             }
         }
         dropped
+    }
+
+    /// Rows carrying `mark` (💤/➜/⭐), in flow order, for the decision
+    /// summary. `Mark::None` yields nothing — it is absence of a mark.
+    #[must_use]
+    pub fn marked_arguments(&self, mark: Mark) -> Vec<MarkedArgument> {
+        if mark == Mark::None {
+            return Vec::new();
+        }
+        let mut marked = Vec::new();
+        for (rows, owner, origin_col) in [
+            (&self.pro_rows, Side::Pro, 0usize),
+            (&self.con_rows, Side::Con, 1usize),
+        ] {
+            for row in rows {
+                if let Some(speech) = row
+                    .cells
+                    .iter()
+                    .enumerate()
+                    .find(|(_, c)| c.mark == mark)
+                    .and_then(|(col, _)| SPEECH_COLS.get(col))
+                    .map(|s| s.full)
+                {
+                    marked.push(MarkedArgument {
+                        owner,
+                        name: row_display_name(row, origin_col),
+                        speech,
+                    });
+                }
+            }
+        }
+        marked
+    }
+
+    /// Plain-text decision summary copied to the clipboard: ballot fields
+    /// plus the rows the judge starred, extended, or marked dropped —
+    /// the basis of the decision, previously invisible to the summary.
+    #[must_use]
+    pub fn decision_text(&self) -> String {
+        use std::fmt::Write as _;
+        let winner = if self.winner.is_empty() {
+            "—"
+        } else {
+            &self.winner
+        };
+        let mut text = format!(
+            "Flower — PF decision\nTopic: {}\nPro: {} · Con: {}\nWinner: {}\nReason: {}",
+            self.topic, self.pro_team, self.con_team, winner, self.rfd
+        );
+        for (mark, heading) in [
+            (Mark::Key, "⭐ Key arguments:"),
+            (Mark::Extended, "➜ Extended arguments:"),
+            (Mark::Dropped, "💤 Marked dropped:"),
+        ] {
+            let rows = self.marked_arguments(mark);
+            if !rows.is_empty() {
+                let _ = write!(text, "\n{heading}");
+                for row in rows {
+                    let _ = write!(
+                        text,
+                        "\n- {}: “{}” ({})",
+                        row.owner.label(),
+                        row.name,
+                        row.speech
+                    );
+                }
+            }
+        }
+        text
     }
 
     pub fn sample() -> Self {
@@ -749,5 +866,74 @@ mod tests {
         // The owner's own later speeches are extensions, not answers:
         // a Pro row only extended in Pro Summary (4) is still dropped.
         assert_eq!(pro_round(Some(4)).dropped_arguments(10).len(), 1);
+    }
+
+    #[test]
+    fn explicit_dropped_mark_overrides_answer_text_and_rebuttal_gate() {
+        // Answered in Con Rebuttal (3), yet judge marked it dropped:
+        // the explicit mark wins at any step, even step 0.
+        let mut round = pro_round(Some(3));
+        round.pro_rows[0].cells[0].mark = Mark::Dropped;
+        for step in [0, 5, 10] {
+            let dropped = round.dropped_arguments(step);
+            assert_eq!(dropped.len(), 1, "explicit 💤 ignored at step {step}");
+            assert!(dropped[0].explicit);
+            assert_eq!(dropped[0].name, "C1: Oceans");
+        }
+        // Without the mark the same answered row is never flagged.
+        assert!(pro_round(Some(3)).dropped_arguments(10).is_empty());
+    }
+
+    #[test]
+    fn inferred_drop_carries_extended_and_key_flags() {
+        let mut round = pro_round(None);
+        round.pro_rows[0].cells[4].text = "extend it".to_owned();
+        round.pro_rows[0].cells[4].mark = Mark::Extended;
+        round.pro_rows[0].cells[0].mark = Mark::Key;
+        let dropped = round.dropped_arguments(10);
+        assert_eq!(dropped.len(), 1);
+        assert!(!dropped[0].explicit);
+        assert!(dropped[0].extended);
+        assert!(dropped[0].key);
+    }
+
+    #[test]
+    fn marked_arguments_and_decision_text_include_key_extended_dropped() {
+        let round = RoundData::sample();
+        // Sample: pro2 origin ⭐, pro1 cells 3+4 ➜, con2 origin 💤.
+        let key = round.marked_arguments(Mark::Key);
+        assert_eq!(key.len(), 1);
+        assert_eq!(key[0].owner, Side::Pro);
+        assert_eq!(key[0].name, "C2: Health 🧸");
+        assert_eq!(key[0].speech, "Pro Constructive");
+        // One row per marked row, first marked speech wins.
+        let extended = round.marked_arguments(Mark::Extended);
+        assert_eq!(extended.len(), 1);
+        assert_eq!(extended[0].name, "C1: Oceans 🌊");
+        assert_eq!(extended[0].speech, "Con Rebuttal");
+        let dropped = round.marked_arguments(Mark::Dropped);
+        assert_eq!(dropped.len(), 1);
+        assert_eq!(dropped[0].owner, Side::Con);
+        assert!(round.marked_arguments(Mark::None).is_empty());
+
+        let text = round.decision_text();
+        assert!(text.contains("Winner: —"), "{text}");
+        assert!(
+            text.contains("⭐ Key arguments:") && text.contains("C2: Health"),
+            "{text}"
+        );
+        assert!(
+            text.contains("➜ Extended arguments:") && text.contains("C1: Oceans"),
+            "{text}"
+        );
+        assert!(
+            text.contains("💤 Marked dropped:") && text.contains("C2: Alternatives"),
+            "{text}"
+        );
+        // Unmarked round: no mark sections at all.
+        let plain = RoundData::default().decision_text();
+        assert!(!plain.contains("Key arguments"), "{plain}");
+        assert!(!plain.contains("Extended arguments"), "{plain}");
+        assert!(!plain.contains("Marked dropped"), "{plain}");
     }
 }
