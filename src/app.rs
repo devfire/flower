@@ -336,7 +336,7 @@ pub fn App() -> impl IntoView {
                             </div>
                         </div>
                         <div class="prep-row">
-                            <span>"Prep left (3:00 per team, whole round):"</span>
+                            <span>"Prep left (3m/team):"</span>
                             <button class="btn btn-chip btn-pro" on:click=move |_| start_prep(Side::Pro)>
                                 {move || format!("Pro · {}", fmt_time(timer_bank.get().secs_for(TimerKind::Prep(Side::Pro), timer_secs.get())))}
                             </button>
