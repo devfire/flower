@@ -240,7 +240,10 @@ pub fn App() -> impl IntoView {
     let st_clear = state.clone();
     let st_export = state.clone();
     let st_topic = state.clone();
-    let current_col = move || GUIDE[step.get()].flow_col;
+    // Issue #20: a derived signal, not a plain value snapshot, so step
+    // changes update only the `cell-now`/`fh-now` class bindings in the
+    // already-mounted sheets instead of rebuilding every row/textarea.
+    let current_col = Signal::derive(move || GUIDE[step.get()].flow_col);
 
     view! {
         <div class="page">
@@ -436,10 +439,15 @@ pub fn App() -> impl IntoView {
                     <span class="legend-chip">"⭐ star the arguments the round will be decided on"</span>
                 </p>
 
-                {{let s = st_flow.clone(); move || {
-                    let side = tab.get();
-                    view! { <FlowSheet state=s.clone() side=side current_col=current_col() focus_mode=focus_mode insert_ctx=Some(insert_ctx) on_speech_click=Some(on_speech_click) /> }
-                }}}
+                // Issue #20: both sheets mount once; the tab only toggles
+                // visibility. Rebuilding on tab/step used to destroy every
+                // textarea (focus, caret, undo history, scroll position).
+                <div class:sheet-hidden=move || tab.get() != Side::Pro>
+                    <FlowSheet state=st_flow.clone() side=Side::Pro current_col=Some(current_col) focus_mode=focus_mode insert_ctx=Some(insert_ctx) on_speech_click=Some(on_speech_click) />
+                </div>
+                <div class:sheet-hidden=move || tab.get() != Side::Con>
+                    <FlowSheet state=st_flow.clone() side=Side::Con current_col=Some(current_col) focus_mode=focus_mode insert_ctx=Some(insert_ctx) on_speech_click=Some(on_speech_click) />
+                </div>
 
                 <details class="shorthand no-print">
                     <summary>"✂️ Shorthand cheat sheet — tap a symbol to drop it into the box you're writing in"</summary>
@@ -591,7 +599,7 @@ fn DroppedHints(state: RoundState, step: RwSignal<usize>) -> impl IntoView {
 fn FlowSheet(
     state: RoundState,
     side: Side,
-    current_col: Option<usize>,
+    current_col: Option<Signal<Option<usize>>>,
     focus_mode: RwSignal<bool>,
     insert_ctx: Option<InsertCtx>,
     on_speech_click: Option<Callback<usize>>,
@@ -610,23 +618,27 @@ fn FlowSheet(
                         <span class="fh-sub">"one row = one argument"</span>
                     </div>
                     {SPEECH_COLS.iter().enumerate().map(|(col, sc)| {
-                        let is_now = current_col == Some(col);
-                        let dim = move || focus_mode.get() && current_col.is_some() && !is_now;
+                        let is_now = move || current_col.is_some_and(|signal| signal.get() == Some(col));
+                        let dim = move || {
+                            focus_mode.get()
+                                && current_col
+                                    .is_some_and(|signal| matches!(signal.get(), Some(cur) if cur != col))
+                        };
                         match on_speech_click {
                             Some(on_click) => view! {
                                 <button type="button" class="fh fh-click" class:fh-now=is_now class:fh-dim=dim
-                                    aria-current=is_now.then_some("step")
+                                    aria-current=move || is_now().then_some("step")
                                     title=format!("Go to {}", sc.full)
                                     on:click=move |_| on_click.run(col)>
                                     {if col > 0 { Some(view! { <span class="fh-arrow" aria-hidden="true">"➜"</span> }) } else { None }}
-                                    {if is_now { Some(view! { <span class="fh-badge">"✏️ you are here"</span> }) } else { None }}
+                                    {move || is_now().then(|| view! { <span class="fh-badge">"✏️ you are here"</span> })}
                                     <span class="fh-name">{sc.full}</span>
                                     <span class="fh-sub">{format!("{} min", sc.minutes)}</span>
                                 </button>
                             }.into_any(),
                             None => view! {
                                 <div class="fh" class:fh-now=is_now class:fh-dim=dim>
-                                    {if is_now { Some(view! { <span class="fh-badge">"✏️ you are here"</span> }) } else { None }}
+                                    {move || is_now().then(|| view! { <span class="fh-badge">"✏️ you are here"</span> })}
                                     <span class="fh-name">{sc.full}</span>
                                     <span class="fh-sub">{format!("{} min", sc.minutes)}</span>
                                 </div>
@@ -658,7 +670,7 @@ fn FlowRow(
     side: Side,
     row: RowState,
     row_index: usize,
-    current_col: Option<usize>,
+    current_col: Option<Signal<Option<usize>>>,
     focus_mode: RwSignal<bool>,
     insert_ctx: Option<InsertCtx>,
 ) -> impl IntoView {
@@ -714,8 +726,12 @@ fn FlowRow(
         </div>
         {row.cells.iter().enumerate().map(|(col, cell)| {
             let cell = *cell;
-            let is_now = current_col == Some(col);
-            let dim = move || focus_mode.get() && current_col.is_some() && !is_now;
+            let is_now = move || current_col.is_some_and(|signal| signal.get() == Some(col));
+            let dim = move || {
+                focus_mode.get()
+                    && current_col
+                        .is_some_and(|signal| matches!(signal.get(), Some(cur) if cur != col))
+            };
             let placeholder = placeholder_for(side, col);
             let title_signal = row.title;
             let cell_target = TextTarget::FlowCell { side, row_id, col };

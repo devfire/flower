@@ -145,6 +145,9 @@ button, input, textarea { font: inherit; color: inherit; }
 .tab-pro.tab-on { background: var(--blue); border-color: var(--blue-deep); box-shadow: 0 6px 16px rgba(94,163,216,.4); }
 .tab-con.tab-on { background: var(--mint); border-color: var(--mint-deep); box-shadow: 0 6px 16px rgba(79,191,139,.35); }
 .tab-arrow { color: var(--muted); font-weight: 800; }
+/* Issue #20: inactive interactive sheet stays mounted (focus/caret/scroll
+   survive tab and step changes); only visibility toggles. */
+.sheet-hidden { display: none; }
 .flow-legend { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 14px; font-weight: 700; }
 .legend-chip { background: #f7fbff; border: 2px solid var(--border); border-radius: 999px; padding: 3px 10px; font-size: .8rem; }
 /* Top padding must clear the .fh-badge, which hangs 11px above the active
