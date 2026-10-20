@@ -108,7 +108,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .step-chip:hover { border-color: var(--blue-deep); }
 .step-chip.is-done { background: var(--mint); border-color: var(--mint-deep); color: #14532d; }
 .step-chip.is-now { background: linear-gradient(135deg, #1f5c86, #256a99); color: #fff; border-color: #1f5c86; transform: scale(1.06); box-shadow: 0 4px 12px rgba(47,127,184,.35); }
-.guide-body { display: grid; grid-template-columns: minmax(0, 1fr) clamp(250px, 22vw, 380px); gap: clamp(12px, 1.4vw, 24px); }
+.guide-body { display: grid; grid-template-columns: repeat(2, clamp(250px, 22vw, 380px)); gap: clamp(12px, 1.4vw, 24px); }
 .guide-body > * { min-width: 0; }
 .bubble-wrap { display: flex; gap: 12px; align-items: flex-start; }
 .mascot { font-size: 44px; animation: bob 3.4s ease-in-out infinite; }
@@ -273,7 +273,7 @@ button, input, textarea { font: inherit; color: inherit; }
   .cell textarea { min-height: 76px; }
 }
 @media (max-width: 1180px) {
-  .guide-body { grid-template-columns: minmax(0, 1fr) 250px; }
+  .guide-body { grid-template-columns: repeat(2, 250px); }
 }
 @media (max-width: 860px) {
   .guide-body { grid-template-columns: 1fr; }
