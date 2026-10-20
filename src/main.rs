@@ -2,6 +2,7 @@
 
 mod app;
 mod model;
+mod progress;
 mod shorthand;
 mod state;
 mod timer;

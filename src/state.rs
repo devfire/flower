@@ -5,6 +5,7 @@
 use std::cell::{Cell, RefCell};
 
 use crate::model::*;
+use crate::progress::{PROGRESS_STORAGE_KEY, RoundProgress};
 use gloo_timers::callback::Timeout;
 use leptos::prelude::*;
 use wasm_bindgen::{JsCast, closure::Closure};
@@ -204,6 +205,11 @@ impl RoundState {
 /// dismisses the notice — a blank round never silently overwrites it.
 pub struct LoadedRound {
     pub data: RoundData,
+    /// Restored walk/timer/sheet state (issue #17). Fresh-round defaults
+    /// when there is no readable progress save — including when the round
+    /// itself was unreadable, so a blank replacement round never inherits
+    /// a half-finished walk from the save it is replacing.
+    pub progress: RoundProgress,
     pub recovery_notice: Option<String>,
 }
 
@@ -212,15 +218,29 @@ pub fn load_initial() -> LoadedRound {
     let stored = storage
         .as_ref()
         .and_then(|s| s.get_item(STORAGE_KEY).ok().flatten());
+    // Progress is best-effort and independent of the round key: a judge
+    // who only advanced speeches / burned prep (never typed) has no round
+    // save yet, and a missing or unreadable progress save restarts the
+    // walk but must never cost them their flow.
+    let load_progress = || {
+        storage
+            .as_ref()
+            .and_then(|s| s.get_item(PROGRESS_STORAGE_KEY).ok().flatten())
+            .and_then(|json| RoundProgress::from_saved_json(&json).ok())
+            .unwrap_or_default()
+    };
     let Some(json) = stored else {
         return LoadedRound {
             data: RoundData::default(),
+            progress: load_progress(),
             recovery_notice: None,
         };
     };
     if let Ok(data) = RoundData::from_saved_json(&json) {
+        let progress = load_progress();
         LoadedRound {
             data,
+            progress,
             recovery_notice: None,
         }
     } else {
@@ -240,6 +260,7 @@ pub fn load_initial() -> LoadedRound {
         };
         LoadedRound {
             data: RoundData::default(),
+            progress: RoundProgress::default(),
             recovery_notice: Some(recovery_notice),
         }
     }
@@ -260,10 +281,21 @@ struct PendingSave {
     timeout: Timeout,
 }
 
+/// Same debounce for progress (issue #17): the timer tick schedules this
+/// four times a second, and the trailing write only happens on a pause,
+/// a switch, or a page-hide flush — never per tick.
+struct PendingProgressSave {
+    state: RoundState,
+    progress: RoundProgress,
+    #[allow(dead_code)]
+    timeout: Timeout,
+}
+
 type FlushListener = Closure<dyn FnMut(web_sys::Event)>;
 
 thread_local! {
     static PENDING_SAVE: RefCell<Option<PendingSave>> = const { RefCell::new(None) };
+    static PENDING_PROGRESS_SAVE: RefCell<Option<PendingProgressSave>> = const { RefCell::new(None) };
     static FLUSH_HOOKS_INSTALLED: Cell<bool> = const { Cell::new(false) };
     /// Kept alive for the page's lifetime: dropping a `Closure` removes
     /// the event listener it backs.
@@ -289,6 +321,25 @@ pub fn save(state: &RoundState) {
     });
 }
 
+/// Schedule a progress autosave under `PROGRESS_STORAGE_KEY`, with the
+/// same recovery-block and debounce rules as `save`. `state` is only the
+/// carrier for the recovery block and the save-failed flag.
+pub fn save_progress(state: &RoundState, progress: RoundProgress) {
+    if state.recovery_notice.get_untracked().is_some() {
+        return;
+    }
+    install_flush_hooks();
+    let scheduled = state.clone();
+    let timeout = Timeout::new(SAVE_DEBOUNCE_MS, flush_save);
+    PENDING_PROGRESS_SAVE.with(|pending| {
+        *pending.borrow_mut() = Some(PendingProgressSave {
+            state: scheduled,
+            progress,
+            timeout,
+        });
+    });
+}
+
 /// Write any pending autosave now. Called by the debounce timer and when
 /// the page is about to go away (`pagehide`, window `blur`, tab hidden),
 /// so a debounced edit still survives an abrupt tab close.
@@ -296,6 +347,26 @@ pub fn flush_save() {
     let pending = PENDING_SAVE.with(|pending| pending.borrow_mut().take());
     if let Some(pending) = pending {
         write_snapshot(&pending.state);
+    }
+    let pending = PENDING_PROGRESS_SAVE.with(|pending| pending.borrow_mut().take());
+    if let Some(pending) = pending {
+        write_progress(&pending.state, pending.progress);
+    }
+}
+
+fn write_progress(state: &RoundState, progress: RoundProgress) {
+    if state.recovery_notice.get_untracked().is_some() {
+        return;
+    }
+    let storage = web_sys::window().and_then(|w| w.local_storage().ok().flatten());
+    let saved = match (storage, serde_json::to_string(&progress)) {
+        (Some(storage), Ok(json)) => storage.set_item(PROGRESS_STORAGE_KEY, &json).is_ok(),
+        (Some(_), Err(_)) | (None, _) => false,
+    };
+    // Only ever raise the flag here: a successful progress write does not
+    // prove the (separately debounced) round snapshot is saved.
+    if !saved {
+        state.save_failed.set(true);
     }
 }
 

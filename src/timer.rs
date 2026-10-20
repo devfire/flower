@@ -44,6 +44,19 @@ impl TimerBank {
         }
     }
 
+    /// Rebuild a bank from saved remainders (issue #17), clamped to the
+    /// same ranges `bank_displayed` enforces: a hand-edited or stale save
+    /// can never resurrect more prep than a team starts with, or a
+    /// negative speech remainder.
+    #[must_use]
+    pub fn restored(speech_secs: i32, pro_prep_secs: i32, con_prep_secs: i32, active: TimerKind) -> Self {
+        let mut bank = Self::new(speech_secs);
+        bank.active = active;
+        bank.pro_prep_secs = pro_prep_secs.clamp(0, PREP_SECS);
+        bank.con_prep_secs = con_prep_secs.clamp(0, PREP_SECS);
+        bank
+    }
+
     #[must_use]
     pub fn active(self) -> TimerKind {
         self.active

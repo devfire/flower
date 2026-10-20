@@ -1,4 +1,5 @@
 use crate::model::*;
+use crate::progress::RoundProgress;
 use crate::shorthand::{InsertCtx, TextTarget, insert_shorthand};
 use crate::state::*;
 use crate::timer::{PREP_SECS, TimerBank, TimerKind, fmt_time};
@@ -56,17 +57,23 @@ pub fn App() -> impl IntoView {
             }
         });
     }
-    let step = RwSignal::new(0usize);
-    let tab = RwSignal::new(Side::Pro);
-    let focus_mode = RwSignal::new(true);
+    // Issue #17: restore the walk, timers and sheet from the progress
+    // save. The timer itself never auto-resumes after a reload — only
+    // its remainder does; the judge presses Start again.
+    let progress = loaded.progress;
+    let step = RwSignal::new(progress.step);
+    let tab = RwSignal::new(progress.tab);
+    let focus_mode = RwSignal::new(progress.focus_mode);
     let insert_ctx = InsertCtx::new();
-    let initial_secs = (GUIDE[0].minutes * 60).cast_signed();
-    let timer_secs = RwSignal::new(initial_secs);
+    let timer_secs = RwSignal::new(progress.displayed_secs());
     // Remainders of the timers not on screen: the speech timer plus each
     // team's whole-round prep balance (issue #6). Banking the display
     // into this on every freeze/tick is what lets timers survive switches.
-    let timer_bank = RwSignal::new(TimerBank::new(initial_secs));
-    let timer_label = RwSignal::new(GUIDE[0].title.to_string());
+    let timer_bank = RwSignal::new(progress.timer_bank());
+    let timer_label = RwSignal::new(match progress.active_prep {
+        Some(side) => format!("{} prep time ⏱️", side.label()),
+        None => GUIDE[progress.step].title.to_string(),
+    });
     let timer_announcement = RwSignal::new(String::new());
     let running = RwSignal::new(false);
     let interval = StoredValue::new_local(None::<Interval>);
@@ -75,6 +82,23 @@ pub fn App() -> impl IntoView {
     // throttling cannot make the timer run slow.
     let deadline = StoredValue::new_local(None::<f64>);
     let audio_ctx = StoredValue::new_local(None::<web_sys::AudioContext>);
+
+    // Issue #17: snapshot the walk/timers/sheet for the next load. Reads
+    // are untracked and the write is debounced in `state`, so calling
+    // this on every timer tick costs no storage write per tick.
+    let st_progress = state.clone();
+    let persist_progress = Callback::new(move |()| {
+        save_progress(
+            &st_progress,
+            RoundProgress::capture(
+                step.get_untracked(),
+                tab.get_untracked(),
+                focus_mode.get_untracked(),
+                timer_secs.get_untracked(),
+                timer_bank.get_untracked(),
+            ),
+        );
+    });
 
     let stop_timer = move || {
         // Freeze the displayed remainder before dropping the deadline, so
@@ -85,6 +109,7 @@ pub fn App() -> impl IntoView {
             timer_secs.set(((end - now) / 1_000.0).ceil().max(0.0) as i32);
         }
         timer_bank.update(|b| b.bank_displayed(timer_secs.get_untracked()));
+        persist_progress.run(());
         running.set(false);
         deadline.set_value(None);
         // Dropping the Interval cancels it: no callbacks fire afterwards.
@@ -113,6 +138,7 @@ pub fn App() -> impl IntoView {
         if let Some(side) = sheet {
             tab.set(side);
         }
+        persist_progress.run(());
     });
     // Flow-header click: jump to the guided step that writes in that
     // column. Crossfire steps have no column, so they stay reachable
@@ -154,6 +180,7 @@ pub fn App() -> impl IntoView {
                     timer_secs.set(secs);
                     timer_bank.update(|b| b.bank_displayed(secs));
                 }
+                persist_progress.run(());
             })));
         }
     };
@@ -167,6 +194,7 @@ pub fn App() -> impl IntoView {
         timer_secs.set(timer_bank.get_untracked().prep_secs(side));
         timer_label.set(format!("{} prep time ⏱️", side.label()));
         timer_announcement.set(String::new());
+        persist_progress.run(());
     };
     // The only way a prep balance returns to 3:00: this explicit,
     // per-team action. Resetting the on-screen prep stops its countdown;
@@ -177,6 +205,7 @@ pub fn App() -> impl IntoView {
             timer_secs.set(PREP_SECS);
         }
         timer_bank.update(|b| b.reset_prep(side));
+        persist_progress.run(());
     };
     // Shared Reset: in prep it only returns to the (preserved) speech
     // timer — it must never silently refill prep. During a speech it
@@ -200,6 +229,7 @@ pub fn App() -> impl IntoView {
         }
         timer_label.set(GUIDE[step.get_untracked()].title.to_string());
         timer_announcement.set(String::new());
+        persist_progress.run(());
     };
 
     let st_flow = state.clone();
@@ -244,6 +274,10 @@ pub fn App() -> impl IntoView {
                             // A brand-new round is the other explicit prep
                             // reset: both teams start again at 3:00.
                             timer_bank.update(TimerBank::reset_all_prep);
+                            // Issue #17: the fresh walk/balances replace
+                            // the saved progress, so a reload cannot
+                            // resurrect the previous round's step or prep.
+                            persist_progress.run(());
                         }
                     }>"New round"</button>
                     <button class="btn btn-soft" on:click=move |_| print_page()>"🖨️ Print / save PDF"</button>
@@ -378,19 +412,19 @@ pub fn App() -> impl IntoView {
                 <h2><span class="card-ico">""</span> "2 · Your flow" </h2>
                 <label class="focus-toggle no-print">
                     <input type="checkbox" prop:checked=move || focus_mode.get()
-                        on:change=move |ev| focus_mode.set(event_target_checked(&ev)) />
+                        on:change=move |ev| { focus_mode.set(event_target_checked(&ev)); persist_progress.run(()); } />
                     <span><b>"Focus mode"</b> " — softly dim speeches that aren't happening right now, so your eyes always know where to write."</span>
                 </label>
                 <div class="tabs no-print">
                     <button class="tab tab-pro" class:tab-on=move || tab.get() == Side::Pro
                         aria-pressed=move || if tab.get() == Side::Pro { "true" } else { "false" }
-                        on:click=move |_| tab.set(Side::Pro)>
+                        on:click=move |_| { tab.set(Side::Pro); persist_progress.run(()); }>
                         "Pro sheet" <span class="tab-hint">"their arguments ↓, round →"</span>
                     </button>
                     <span class="tab-arrow" aria-hidden="true">"⇄"</span>
                     <button class="tab tab-con" class:tab-on=move || tab.get() == Side::Con
                         aria-pressed=move || if tab.get() == Side::Con { "true" } else { "false" }
-                        on:click=move |_| tab.set(Side::Con)>
+                        on:click=move |_| { tab.set(Side::Con); persist_progress.run(()); }>
                         "Con sheet" <span class="tab-hint">"their arguments ↓, round →"</span>
                     </button>
                 </div>
