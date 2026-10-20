@@ -87,6 +87,8 @@ button, input, textarea { font: inherit; color: inherit; }
 /* ---------- setup ---------- */
 .setup-layout { display: grid; grid-template-columns: minmax(0, 1fr) clamp(340px, 34vw, 500px); gap: 14px; align-items: stretch; }
 .setup-layout > * { min-width: 0; }
+/* Top edge lines up with the topic input, below its label (label line + 6px field gap). */
+.setup-layout > .timer-box { margin-top: calc(.9rem * 1.4 + 6px); }
 .setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .field { display: flex; flex-direction: column; gap: 6px; font-weight: 800; font-size: .9rem; }
 .field-wide { grid-column: 1 / -1; }
@@ -286,6 +288,7 @@ button.fh-click { border: 2px solid transparent; cursor: pointer; text-align: le
 @media (max-width: 860px) {
   .guide-body { grid-template-columns: 1fr; }
   .setup-layout { grid-template-columns: 1fr; }
+  .setup-layout > .timer-box { margin-top: 0; }
   .setup-grid { grid-template-columns: 1fr; }
   .page { padding: 12px 10px 40px; }
   .card { padding: 16px 14px; }
