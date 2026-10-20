@@ -171,10 +171,6 @@ button.fh-click { border: 2px solid transparent; cursor: pointer; text-align: le
   color: #256a99; font-size: .75rem; line-height: 1; background: var(--surface);
   border-radius: 999px; padding: 1px;
 }
-/* Focus-mode dimming must not fade text (opacity .38 failed contrast,
-   issue #9): desaturate + cool the background instead, text stays full-strength. */
-.fh-dim, .cell-dim { filter: saturate(.45); }
-.cell-dim { background: #e9eff5; }
 .fh-badge {
   position: absolute; top: -11px; right: 6px; background: #256a99; color: #fff;
   font-size: .62rem; padding: 2px 8px; border-radius: 999px; letter-spacing: .02em;
@@ -212,7 +208,7 @@ button.fh-click { border: 2px solid transparent; cursor: pointer; text-align: le
 .cell {
   position: relative; background: #fffdf9; border: 2px solid var(--border);
   border-radius: 14px; padding: 6px; display: flex; flex-direction: column; gap: 5px;
-  transition: opacity .2s;
+  transition: background-color .2s, filter .2s;
 }
 .cell-now { border-color: var(--blue-deep); box-shadow: 0 0 0 3px var(--blue), var(--shadow); background: #f2f9ff; }
 .cell textarea {
@@ -229,6 +225,17 @@ button.fh-click { border: 2px solid transparent; cursor: pointer; text-align: le
 .cell-dropped { background: #eef1ff; border-color: #b9c4f5; }
 .cell-extended { background: #eefbf3; border-color: var(--mint-deep); }
 .cell-key { background: #fff8d6; border-color: #e8c832; box-shadow: 0 0 0 2px #ffe97a; }
+/* Focus mode: non-current speeches recede. Must not fade text (opacity .38
+   failed contrast, issue #9), so dim = desaturate + a cool grey-blue
+   background, text luminance untouched (#3f4f66 on #dfe8f1 is ~6.7:1).
+   Compound selectors + placement after `.cell`/`.cell-*` are load-bearing:
+   a lone `.cell-dim { background }` loses to the later, equal-specificity
+   `.cell { background: #fffdf9 }`, and `.sheet-pro .fh` beats a lone
+   `.fh-dim` — either way the dim silently never paints. Mark border
+   colours are deliberately left alone so dropped/extended/key still show. */
+.fh.fh-dim, .cell.cell-dim { filter: saturate(.4); }
+.fh.fh-dim { background: #dfe8f1; }
+.cell.cell-dim { background: #dfe8f1; }
 .cell-marks { display: flex; gap: 4px; flex-wrap: wrap; }
 .mark-btn {
   border: 1.5px solid var(--border); background: #fff; border-radius: 999px;
