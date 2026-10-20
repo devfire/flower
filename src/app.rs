@@ -316,7 +316,6 @@ pub fn App() -> impl IntoView {
                 </div>
 
                     <div class="bubble-wrap no-print">
-                        <div class="mascot" aria-hidden="true">"🐰"</div>
                         <div class="bubble">
                             <p class="bubble-title">
                                 {move || GUIDE[step.get()].title}

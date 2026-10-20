@@ -90,8 +90,6 @@ button, input, textarea { font: inherit; color: inherit; }
 /* Top edges line up with the topic input, below its label (label line + 6px field gap). */
 .setup-layout > .timer-box, .setup-layout > .bubble-wrap { margin-top: calc(.9rem * 1.4 + 6px); }
 /* Squeezed bubble: one notch smaller than standalone guide type. */
-.setup-layout .bubble-wrap { gap: 8px; }
-.setup-layout .mascot { font-size: 34px; }
 .setup-layout .bubble { padding: 12px 14px; }
 .setup-layout .bubble-title { font-size: 1.05rem; }
 .setup-layout .bubble-main { font-size: .95rem; margin: 4px 0 8px; }
@@ -109,15 +107,10 @@ button, input, textarea { font: inherit; color: inherit; }
 .topic-note { font-family: "Nunito", sans-serif; font-size: .82rem; color: var(--muted); font-weight: 700; margin: 0; }
 
 /* ---------- guide bubble ---------- */
-.bubble-wrap { display: flex; gap: 12px; align-items: flex-start; }
-.mascot { font-size: 44px; animation: bob 3.4s ease-in-out infinite; }
+.bubble-wrap { display: flex; align-items: flex-start; }
 .bubble {
-  position: relative; flex: 1; background: linear-gradient(160deg, #e8f4fd, #eef6ff);
+  flex: 1; background: linear-gradient(160deg, #e8f4fd, #eef6ff);
   border: 3px solid var(--blue); border-radius: 22px; padding: 16px 18px;
-}
-.bubble::before {
-  content: ""; position: absolute; left: -14px; top: 30px;
-  border: 8px solid transparent; border-right: 12px solid var(--blue); border-left: 0;
 }
 .bubble-title { margin: 0; font-size: 1.2rem; font-weight: 600; color: #256a99; }
 .bubble-time { color: var(--muted); font-size: .9rem; }
@@ -307,8 +300,6 @@ button.fh-click { border: 2px solid transparent; cursor: pointer; text-align: le
   .hero-mascot { font-size: 42px; }
   .hero-text { flex-basis: auto; }
   .hero-actions { justify-content: center; }
-  .bubble-wrap { gap: 8px; }
-  .mascot { font-size: 32px; }
   .bubble { padding: 13px 14px; }
   .tabs .tab { flex: 1 1 140px; }
   .tab-arrow { display: none; }
