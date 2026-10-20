@@ -262,6 +262,26 @@ pub fn App() -> impl IntoView {
     let st_export = state.clone();
     let st_topic = state.clone();
     let st_order = state.clone();
+    // Speaking-order switch: the step is a speaking position, so it
+    // stays put; re-point the sheet and speech label at that step in
+    // the new order.
+    let apply_order = Callback::new(move |order: SpeakingOrder| {
+        st_order.speaking_order.set(order);
+        save(&st_order);
+        if !matches!(timer_bank.get_untracked().active(), TimerKind::Prep(_)) {
+            let g = order.guide()[step.get_untracked()];
+            timer_label.set(g.title.to_string());
+            let sheet = match g.flow_col {
+                Some(2) => Some(Side::Con),
+                Some(3) => Some(Side::Pro),
+                _ => g.side,
+            };
+            if let Some(side) = sheet {
+                tab.set(side);
+            }
+        }
+        persist_progress.run(());
+    });
     // Issue #20: a derived signal, not a plain value snapshot, so step
     // changes update only the `cell-now`/`fh-now` class bindings in the
     // already-mounted sheets instead of rebuilding every row/textarea.
@@ -373,29 +393,6 @@ pub fn App() -> impl IntoView {
                             prop:value=move || state.con_team.get()
                             on:input={let s = state.clone(); move |ev| { s.con_team.set(event_target_value(&ev)); save(&s); }} />
                     </label>
-                    <label class="focus-toggle order-toggle no-print">
-                        <input type="checkbox" prop:checked=move || speaking_order.get() == SpeakingOrder::ConFirst
-                            on:change={let s = st_order.clone(); move |ev| {
-                                let order = if event_target_checked(&ev) { SpeakingOrder::ConFirst } else { SpeakingOrder::ProFirst };
-                                s.speaking_order.set(order);
-                                save(&s);
-                                // The step is a speaking position, so it
-                                // stays put; re-point the sheet and speech
-                                // label at that step in the new order.
-                                if !matches!(timer_bank.get_untracked().active(), TimerKind::Prep(_)) {
-                                    let g = order.guide()[step.get_untracked()];
-                                    timer_label.set(g.title.to_string());
-                                    let sheet = match g.flow_col {
-                                        Some(2) => Some(Side::Con),
-                                        Some(3) => Some(Side::Pro),
-                                        _ => g.side,
-                                    };
-                                    if let Some(side) = sheet { tab.set(side); }
-                                }
-                                persist_progress.run(());
-                            }} />
-                        <span><b>"Con speaks first"</b> " — the coin flip gave Con the opening speech. Columns, guide and timers follow that order; notes already written stay under their own speech."</span>
-                    </label>
                 </div>
 
                     <div class="bubble-wrap no-print">
@@ -459,11 +456,23 @@ pub fn App() -> impl IntoView {
             // ---------- Flow sheets ----------
             <section class="card flow-card">
                 <h2><span class="card-ico">""</span> "2 · Your flow" </h2>
-                <label class="focus-toggle no-print">
-                    <input type="checkbox" prop:checked=move || focus_mode.get()
-                        on:change=move |ev| { focus_mode.set(event_target_checked(&ev)); persist_progress.run(()); } />
-                    <span><b>"Focus mode"</b> " — softly dim speeches that aren't happening right now, so your eyes always know where to write."</span>
-                </label>
+                <div class="flow-controls no-print">
+                    <label class="focus-toggle">
+                        <input type="checkbox" prop:checked=move || focus_mode.get()
+                            on:change=move |ev| { focus_mode.set(event_target_checked(&ev)); persist_progress.run(()); } />
+                        <span><b>"Focus mode"</b> " — softly dim speeches that aren't happening right now, so your eyes always know where to write."</span>
+                    </label>
+                    <div class="order-toggle" role="group" aria-label="Speaking order">
+                        <button class="order-btn" class:order-on=move || speaking_order.get() == SpeakingOrder::ProFirst
+                            aria-pressed=move || if speaking_order.get() == SpeakingOrder::ProFirst { "true" } else { "false" }
+                            title="Pro speaks first"
+                            on:click=move |_| apply_order.run(SpeakingOrder::ProFirst)>"Pro"</button>
+                        <button class="order-btn" class:order-on=move || speaking_order.get() == SpeakingOrder::ConFirst
+                            aria-pressed=move || if speaking_order.get() == SpeakingOrder::ConFirst { "true" } else { "false" }
+                            title="Con speaks first"
+                            on:click=move |_| apply_order.run(SpeakingOrder::ConFirst)>"Con"</button>
+                    </div>
+                </div>
                 <div class="tabs no-print">
                     <button class="tab tab-pro" class:tab-on=move || tab.get() == Side::Pro
                         aria-pressed=move || if tab.get() == Side::Pro { "true" } else { "false" }
