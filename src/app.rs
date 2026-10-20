@@ -305,13 +305,6 @@ pub fn App() -> impl IntoView {
                             on:input={let s = state.clone(); move |ev| { s.con_team.set(event_target_value(&ev)); save(&s); }} />
                     </label>
                 </div>
-                <div class="howto">
-                    <div class="howto-step"><b>"Two pages"</b><span>"Pro arguments live on the blue sheet, Con arguments on the green sheet — never mixed."</span></div>
-                    <div class="howto-arrow" aria-hidden="true">"➜"</div>
-                    <div class="howto-step"><b>"⬇️ Then across"</b><span>"Each new speech gets the next column. Answers go directly right of the argument they answer."</span></div>
-                    <div class="howto-arrow" aria-hidden="true">"➜"</div>
-                    <div class="howto-step"><b>"💤 Blank = dropped"</b><span>"No answer in the box? Leave it blank. If they extend it later, draw the arrow ➜."</span></div>
-                </div>
             </section>
 
             // ---------- Guided speech walk ----------

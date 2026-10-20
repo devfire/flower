@@ -96,13 +96,6 @@ button, input, textarea { font: inherit; color: inherit; }
 }
 .topic-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: -4px; }
 .topic-note { font-family: "Nunito", sans-serif; font-size: .82rem; color: var(--muted); font-weight: 700; margin: 0; }
-.howto { display: flex; align-items: stretch; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
-.howto-step {
-  flex: 1 1 200px; display: flex; flex-direction: column; gap: 4px;
-  background: linear-gradient(160deg, #eef7ff, #f6faff); border: 2px dashed var(--blue-deep);
-  border-radius: 16px; padding: 12px 14px; font-size: .92rem; line-height: 1.45;
-}
-.howto-arrow { align-self: center; font-size: 1.4rem; color: var(--blue-deep); }
 
 /* ---------- guide / stepper ---------- */
 .stepper { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-bottom: 16px; }
@@ -281,12 +274,10 @@ button, input, textarea { font: inherit; color: inherit; }
 }
 @media (max-width: 1180px) {
   .guide-body { grid-template-columns: minmax(0, 1fr) 250px; }
-  .howto-step { flex-basis: 160px; }
 }
 @media (max-width: 860px) {
   .guide-body { grid-template-columns: 1fr; }
   .setup-grid { grid-template-columns: 1fr; }
-  .howto-arrow { display: none; }
   .page { padding: 12px 10px 40px; }
   .card { padding: 16px 14px; }
   /* Long rows of chips scroll sideways instead of wrapping into a tall stack. */
