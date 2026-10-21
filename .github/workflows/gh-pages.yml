@@ -32,8 +32,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Same pinned toolchain and Trunk as ci.yml, so the weekly scheduled
+      # deploy cannot pick up a new compiler or Trunk unreviewed (issue #38).
       - name: Install Rust (wasm32 target)
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
         with:
           targets: wasm32-unknown-unknown
 
@@ -41,7 +43,9 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Install Trunk
-        uses: taiki-e/install-action@trunk
+        uses: taiki-e/install-action@v2
+        with:
+          tool: trunk@0.21.14
 
       # Build-time NSDA extraction (issue #13): a browser fetch is
       # CORS-blocked, so curl the topics page here instead. On failure

@@ -1,0 +1,8 @@
+[toolchain]
+# Pinned so CI and the weekly scheduled deploy build with the same compiler
+# (issue #38). Bump deliberately, alongside the dtolnay/rust-toolchain tag in
+# .github/workflows/*.yml.
+channel = "1.97.1"
+components = ["rustfmt", "clippy"]
+targets = ["wasm32-unknown-unknown"]
+profile = "minimal"

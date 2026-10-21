@@ -26,8 +26,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Toolchain version matches rust-toolchain.toml (issue #38).
       - name: Install Rust (wasm32 target, rustfmt, clippy)
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.97.1
         with:
           targets: wasm32-unknown-unknown
           components: rustfmt, clippy
@@ -38,17 +39,24 @@ jobs:
       - name: Format check
         run: cargo fmt --check
 
+      # --locked: a Cargo.toml edit without a matching Cargo.lock update fails
+      # here instead of silently re-resolving the dependency graph (issue #38).
       - name: Clippy (wasm target, pedantic gate)
-        run: cargo clippy --target wasm32-unknown-unknown --all-targets -- -D warnings -D clippy::pedantic
+        run: cargo clippy --locked --target wasm32-unknown-unknown --all-targets -- -D warnings -D clippy::pedantic
 
       - name: Unit tests
-        run: cargo test
+        run: cargo test --locked
 
       - name: NSDA topic extraction tests
         run: python3 -m unittest discover -s scripts -v
 
       - name: Install Trunk
-        uses: taiki-e/install-action@trunk
+        uses: taiki-e/install-action@v2
+        with:
+          tool: trunk@0.21.14
 
+      # trunk runs cargo itself without --locked; the --locked clippy/test
+      # steps above already fail on a stale Cargo.lock, so this build cannot
+      # re-resolve dependencies.
       - name: Build (release, same flags as deploy)
         run: trunk build --release --public-url ./
