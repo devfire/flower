@@ -139,18 +139,18 @@ pub fn App() -> impl IntoView {
     // save. The timer itself never auto-resumes after a reload — only
     // its remainder does; the judge presses Start again.
     let progress = loaded.progress;
-    let step = RwSignal::new(progress.step);
-    let tab = RwSignal::new(progress.tab);
-    let focus_mode = RwSignal::new(progress.focus_mode);
+    let step = RwSignal::new(progress.step());
+    let tab = RwSignal::new(progress.tab());
+    let focus_mode = RwSignal::new(progress.focus_mode());
     let insert_ctx = InsertCtx::new();
     let timer_secs = RwSignal::new(progress.displayed_secs());
     // Remainders of the timers not on screen: the speech timer plus each
     // team's whole-round prep balance (issue #6). Banking the display
     // into this on every freeze/tick is what lets timers survive switches.
     let timer_bank = RwSignal::new(progress.timer_bank());
-    let timer_label = RwSignal::new(match progress.active_prep {
+    let timer_label = RwSignal::new(match progress.active_prep() {
         Some(side) => format!("{} prep time ⏱️", side.label()),
-        None => initial_order.guide()[progress.step].title.to_string(),
+        None => initial_order.guide()[progress.step()].title.to_string(),
     });
     let timer_announcement = RwSignal::new(String::new());
     let running = RwSignal::new(false);

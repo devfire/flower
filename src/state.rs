@@ -5,8 +5,8 @@
 use std::cell::{Cell, RefCell};
 
 use crate::model::{
-    CellData, DroppedArgument, Mark, RoundData, RowData, STORAGE_BACKUP_KEY, STORAGE_KEY,
-    STORAGE_REVISION_KEY, Side, SpeakingOrder, next_revision, stored_revision,
+    CellData, DroppedArgument, Mark, RoundData, RowData, SPEECH_COLS, STORAGE_BACKUP_KEY,
+    STORAGE_KEY, STORAGE_REVISION_KEY, Side, SpeakingOrder, next_revision, stored_revision,
 };
 use crate::progress::{PROGRESS_STORAGE_KEY, RoundProgress};
 use gloo_timers::callback::Timeout;
@@ -23,7 +23,7 @@ pub struct CellState {
 pub struct RowState {
     pub id: u32,
     pub title: RwSignal<String>,
-    pub cells: Vec<CellState>,
+    pub cells: [CellState; SPEECH_COLS.len()],
 }
 
 impl RowState {
@@ -34,16 +34,13 @@ impl RowState {
         Self {
             id: *id,
             title: RwSignal::new(title.clone()),
-            cells: cells
-                .iter()
-                .map(|c| {
-                    let CellData { text, mark } = c;
-                    CellState {
-                        text: RwSignal::new(text.clone()),
-                        mark: RwSignal::new(*mark),
-                    }
-                })
-                .collect(),
+            cells: cells.each_ref().map(|c| {
+                let CellData { text, mark } = c;
+                CellState {
+                    text: RwSignal::new(text.clone()),
+                    mark: RwSignal::new(*mark),
+                }
+            }),
         }
     }
 
@@ -55,14 +52,10 @@ impl RowState {
         RowData {
             id: self.id,
             title: read_signal(self.title, tracked),
-            cells: self
-                .cells
-                .iter()
-                .map(|c| CellData {
-                    text: read_signal(c.text, tracked),
-                    mark: read_signal(c.mark, tracked),
-                })
-                .collect(),
+            cells: self.cells.each_ref().map(|c| CellData {
+                text: read_signal(c.text, tracked),
+                mark: read_signal(c.mark, tracked),
+            }),
         }
     }
 }

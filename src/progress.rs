@@ -13,22 +13,68 @@ use crate::timer::{PREP_SECS, TimerBank, TimerKind};
 
 pub const PROGRESS_STORAGE_KEY: &str = "flower-progress-v1";
 
-/// `#[serde(default)]`: a progress save missing a field falls back to the
-/// fresh-round value for that field instead of discarding everything.
+/// Fields are private so that every value is built by `capture`,
+/// `from_saved_json`, or `Default` — all of which clamp via `normalised`.
+/// Deserialisation goes through `SavedProgress` for the same reason.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
-#[serde(default)]
+#[serde(from = "SavedProgress")]
 pub struct RoundProgress {
     /// Index into `GUIDE`.
-    pub step: usize,
-    pub tab: Side,
-    pub focus_mode: bool,
+    step: usize,
+    tab: Side,
+    focus_mode: bool,
     /// Banked speech remainder; the displayed value when a prep timer is
     /// on screen instead.
-    pub speech_secs: i32,
-    pub pro_prep_secs: i32,
-    pub con_prep_secs: i32,
+    speech_secs: i32,
+    pro_prep_secs: i32,
+    con_prep_secs: i32,
     /// Which prep timer is on screen, or `None` for the speech timer.
-    pub active_prep: Option<Side>,
+    active_prep: Option<Side>,
+}
+
+/// Wire shape of a progress save. `#[serde(default)]`: a save missing a
+/// field falls back to the fresh-round value for that field instead of
+/// discarding everything.
+#[derive(Deserialize)]
+#[serde(default)]
+struct SavedProgress {
+    step: usize,
+    tab: Side,
+    focus_mode: bool,
+    speech_secs: i32,
+    pro_prep_secs: i32,
+    con_prep_secs: i32,
+    active_prep: Option<Side>,
+}
+
+impl Default for SavedProgress {
+    fn default() -> Self {
+        let fresh = RoundProgress::default();
+        Self {
+            step: fresh.step,
+            tab: fresh.tab,
+            focus_mode: fresh.focus_mode,
+            speech_secs: fresh.speech_secs,
+            pro_prep_secs: fresh.pro_prep_secs,
+            con_prep_secs: fresh.con_prep_secs,
+            active_prep: fresh.active_prep,
+        }
+    }
+}
+
+impl From<SavedProgress> for RoundProgress {
+    fn from(saved: SavedProgress) -> Self {
+        Self {
+            step: saved.step,
+            tab: saved.tab,
+            focus_mode: saved.focus_mode,
+            speech_secs: saved.speech_secs,
+            pro_prep_secs: saved.pro_prep_secs,
+            con_prep_secs: saved.con_prep_secs,
+            active_prep: saved.active_prep,
+        }
+        .normalised()
+    }
 }
 
 impl Default for RoundProgress {
@@ -79,14 +125,36 @@ impl RoundProgress {
     /// # Errors
     /// Returns the `serde_json` error when `json` is not readable progress.
     pub fn from_saved_json(json: &str) -> Result<Self, serde_json::Error> {
-        serde_json::from_str(json).map(Self::normalised)
+        serde_json::from_str(json)
+    }
+
+    /// Index into `GUIDE` of the step the walk is on.
+    #[must_use]
+    pub const fn step(&self) -> usize {
+        self.step
+    }
+
+    #[must_use]
+    pub const fn tab(&self) -> Side {
+        self.tab
+    }
+
+    #[must_use]
+    pub const fn focus_mode(&self) -> bool {
+        self.focus_mode
+    }
+
+    /// Which prep timer is on screen, or `None` for the speech timer.
+    #[must_use]
+    pub const fn active_prep(&self) -> Option<Side> {
+        self.active_prep
     }
 
     /// Clamp every field to a value the UI can use directly: a step that
     /// exists in `GUIDE`, a non-negative speech remainder no longer than
     /// the longest speech, and prep balances within `0..=PREP_SECS`.
     #[must_use]
-    pub fn normalised(mut self) -> Self {
+    fn normalised(mut self) -> Self {
         self.step = self.step.min(GUIDE.len() - 1);
         let max_speech = GUIDE.iter().map(|g| g.minutes * 60).max().unwrap_or(0);
         self.speech_secs = self.speech_secs.clamp(0, max_speech.cast_signed());
@@ -187,6 +255,14 @@ mod tests {
         assert_eq!(p.speech_secs, 0);
         assert_eq!(p.pro_prep_secs, PREP_SECS);
         assert_eq!(p.con_prep_secs, 0);
+    }
+
+    #[test]
+    fn direct_serde_load_is_clamped_too() {
+        let Ok(loaded) = serde_json::from_str::<RoundProgress>(r#"{"step":999}"#) else {
+            panic!("out-of-range progress must still load");
+        };
+        assert_eq!(loaded.step(), GUIDE.len() - 1);
     }
 
     #[test]

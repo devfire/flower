@@ -388,15 +388,35 @@ pub struct CellData {
     pub mark: Mark,
 }
 
+/// Serde bridge for `RowData::cells`: saves may hold any number of cells,
+/// so load pads short rows and drops extra ones, leaving the array length
+/// (the compile-time invariant) as the only shape the rest of the code sees.
+mod cells_serde {
+    use super::{CellData, SPEECH_COLS};
+    use serde::{Deserialize, Deserializer, de::Error as _};
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<[CellData; SPEECH_COLS.len()], D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let mut cells = Vec::<CellData>::deserialize(deserializer)?;
+        cells.resize_with(SPEECH_COLS.len(), CellData::default);
+        cells
+            .try_into()
+            .map_err(|_| D::Error::custom("row cells could not be repaired to one per speech"))
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RowData {
     pub id: u32,
     pub title: String,
-    /// Invariant: exactly `SPEECH_COLS.len()` cells, one per speech.
-    /// Deserialised data may violate it; `RoundData::normalised` restores it
-    /// before any row reaches the UI.
-    pub cells: Vec<CellData>,
+    /// One cell per speech, by construction: the array length is
+    /// `SPEECH_COLS.len()`, so a row with any other count will not compile.
+    /// Loaded saves are padded or truncated by `cells_serde` on the way in.
+    #[serde(deserialize_with = "cells_serde::deserialize")]
+    pub cells: [CellData; SPEECH_COLS.len()],
 }
 
 impl Default for RowData {
@@ -410,9 +430,7 @@ impl RowData {
         Self {
             id,
             title: title.to_owned(),
-            cells: (0..SPEECH_COLS.len())
-                .map(|_| CellData::default())
-                .collect(),
+            cells: std::array::from_fn(|_| CellData::default()),
         }
     }
 }
@@ -556,8 +574,7 @@ impl RoundData {
             })
     }
 
-    /// Restore the invariants the UI relies on: exactly `SPEECH_COLS.len()`
-    /// cells per row (pad short rows, drop extra cells), unique row ids
+    /// Restore the invariants the UI relies on: unique row ids
     /// (later duplicates get fresh ids), and `next_id` above every row id
     /// so a future row can never reuse one.
     ///
@@ -587,7 +604,6 @@ impl RoundData {
                 seen.insert(fresh);
                 fresh = fresh.checked_add(1)?;
             }
-            row.cells.resize_with(SPEECH_COLS.len(), CellData::default);
         }
         let max_id = self
             .pro_rows
@@ -976,16 +992,23 @@ mod tests {
 
     #[test]
     fn rows_with_wrong_cell_counts_are_normalised_not_panicked_on() {
-        let mut wide = RowData::new(1, "wide");
-        wide.cells = (0..10)
-            .map(|i| CellData {
-                text: format!("c{i}"),
-                mark: Mark::None,
-            })
-            .collect();
-        let mut narrow = RowData::new(2, "narrow");
-        narrow.cells.truncate(3);
-        narrow.cells[2].text = "last kept".to_owned();
+        let cells = |n: usize| -> Vec<serde_json::Value> {
+            (0..n)
+                .map(|i| serde_json::json!({ "text": format!("c{i}") }))
+                .collect()
+        };
+        let Ok(wide) = serde_json::from_value::<RowData>(serde_json::json!({
+            "id": 1, "title": "wide", "cells": cells(10),
+        })) else {
+            panic!("over-wide rows must load");
+        };
+        let Ok(narrow) = serde_json::from_value::<RowData>(serde_json::json!({
+            "id": 2, "title": "narrow", "cells": cells(3),
+        })) else {
+            panic!("short rows must load");
+        };
+        assert_eq!(wide.cells[7].text, "c7", "extra cells are dropped on load");
+        assert_eq!(narrow.cells[2].text, "c2", "short rows are padded on load");
         let Some(round) = RoundData {
             pro_rows: vec![wide, narrow],
             ..RoundData::default()
@@ -996,7 +1019,7 @@ mod tests {
         assert_eq!(round.pro_rows[0].cells.len(), SPEECH_COLS.len());
         assert_eq!(round.pro_rows[0].cells[7].text, "c7");
         assert_eq!(round.pro_rows[1].cells.len(), SPEECH_COLS.len());
-        assert_eq!(round.pro_rows[1].cells[2].text, "last kept");
+        assert_eq!(round.pro_rows[1].cells[2].text, "c2");
         assert_eq!(round.pro_rows[1].cells[7].text, "");
     }
 
