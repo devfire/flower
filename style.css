@@ -83,6 +83,26 @@ button, input, textarea { font: inherit; color: inherit; }
 .btn-chip { padding: 4px 12px; font-size: .85rem; }
 .btn-pro { background: var(--blue); }
 .btn-con { background: var(--mint); }
+.btn-danger { border-color: #b3261e; background: #fde8e8; color: #8c1d18; }
+.btn-danger:hover:not(:disabled) { background: #b3261e; color: #fff; }
+
+/* ---------- confirmation dialog ---------- */
+/* In-UI replacement for the native window.confirm on "New round":
+   centered card on a dimmed backdrop, in the page's own styling. */
+.confirm-overlay {
+  position: fixed; inset: 0; z-index: 50; padding: 20px;
+  background: rgba(63, 79, 102, .45);
+  display: flex; align-items: center; justify-content: center;
+}
+.confirm-dialog {
+  background: var(--surface); border: 3px solid #f0b7c3; border-radius: 24px;
+  box-shadow: var(--shadow); padding: 24px; width: 100%; max-width: 420px;
+  animation: confirm-in .16s ease-out;
+}
+@keyframes confirm-in { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+.confirm-dialog h2 { margin: 0 0 8px; font-size: 1.35rem; font-weight: 600; color: #8c1d18; }
+.confirm-dialog p { margin: 0 0 18px; line-height: 1.5; font-weight: 700; color: var(--muted); }
+.confirm-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 
 /* ---------- setup ---------- */
 .setup-layout { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1fr) clamp(340px, 30vw, 460px); gap: 14px; align-items: stretch; }

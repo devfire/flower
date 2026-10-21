@@ -286,6 +286,40 @@ pub fn App() -> impl IntoView {
     // changes update only the `cell-now`/`fh-now` class bindings in the
     // already-mounted sheets instead of rebuilding every row/textarea.
     let current_col = Signal::derive(move || guide.get()[step.get()].flow_col);
+    // In-UI confirmation for "New round": the native `window.confirm`
+    // dialog appears wherever the browser puts it and matches nothing
+    // else on the page. The safe action takes focus, like row delete.
+    let confirming_new_round = RwSignal::new(false);
+    let keep_round_button = NodeRef::<leptos::html::Button>::new();
+    Effect::new(move |_| {
+        let keep = confirming_new_round
+            .get()
+            .then(|| keep_round_button.get())
+            .flatten();
+        if let Some(button) = keep {
+            let _ = button.focus();
+        }
+    });
+    // `replace` mints the fresh rows' signals when it runs. They must
+    // belong to the App owner, not the confirmation dialog's: closing
+    // the dialog disposes its subtree, which would kill the new rows'
+    // signals and panic every later save/read of them.
+    let app_owner = Owner::current();
+    let start_new_round = Callback::new(move |()| {
+        st_clear.replace(RoundData::default());
+        // A brand-new round starts empty, so it gets the current NSDA
+        // pre-fill like a fresh visit.
+        st_clear.topic.set(nsda_topic.get_untracked().resolution);
+        save(&st_clear);
+        set_step.run(0);
+        // A brand-new round is the other explicit prep reset: both
+        // teams start again at 3:00.
+        timer_bank.update(TimerBank::reset_all_prep);
+        // Issue #17: the fresh walk/balances replace the saved
+        // progress, so a reload cannot resurrect the previous round's
+        // step or prep.
+        persist_progress.run(());
+    });
 
     view! {
         <div class="page">
@@ -309,26 +343,39 @@ pub fn App() -> impl IntoView {
                     }>
                         "See an example round"
                     </button>
-                    <button class="btn btn-soft" on:click=move |_| {
-                        if confirm("Start a brand-new round? This clears the current flow.") {
-                            st_clear.replace(RoundData::default());
-                            // A brand-new round starts empty, so it gets
-                            // the current NSDA pre-fill like a fresh visit.
-                            st_clear.topic.set(nsda_topic.get_untracked().resolution);
-                            save(&st_clear);
-                            set_step.run(0);
-                            // A brand-new round is the other explicit prep
-                            // reset: both teams start again at 3:00.
-                            timer_bank.update(TimerBank::reset_all_prep);
-                            // Issue #17: the fresh walk/balances replace
-                            // the saved progress, so a reload cannot
-                            // resurrect the previous round's step or prep.
-                            persist_progress.run(());
-                        }
-                    }>"New round"</button>
+                    <button class="btn btn-soft" aria-haspopup="dialog"
+                        aria-expanded=move || if confirming_new_round.get() { "true" } else { "false" }
+                        on:click=move |_| confirming_new_round.set(true)>"New round"</button>
                     <button class="btn btn-soft" on:click=move |_| print_page()>"🖨️ Print / save PDF"</button>
                 </div>
             </header>
+
+            {move || confirming_new_round.get().then(|| { let app_owner = app_owner.clone(); view! {
+                <div class="confirm-overlay no-print" on:click=move |_| confirming_new_round.set(false)>
+                    <div class="confirm-dialog" role="alertdialog" aria-modal="true"
+                        aria-labelledby="new-round-title" aria-describedby="new-round-desc"
+                        on:click=move |ev| ev.stop_propagation()
+                        on:keydown=move |ev| {
+                            if ev.key() == "Escape" { confirming_new_round.set(false); }
+                        }>
+                        <h2 id="new-round-title">"Start a brand-new round?"</h2>
+                        <p id="new-round-desc">
+                            "This clears the current flow and resets both prep timers. It can't be undone."
+                        </p>
+                        <div class="confirm-actions">
+                            <button class="btn btn-soft" node_ref=keep_round_button
+                                on:click=move |_| confirming_new_round.set(false)>"Keep current round"</button>
+                            <button class="btn btn-danger" on:click=move |_| {
+                                match &app_owner {
+                                    Some(owner) => owner.with(|| start_new_round.run(())),
+                                    None => start_new_round.run(()),
+                                }
+                                confirming_new_round.set(false);
+                            }>"Start new round"</button>
+                        </div>
+                    </div>
+                </div>
+            } })}
 
             {move || st_notice.recovery_notice.get().map(|notice| {
                 let s = st_notice.clone();
