@@ -1,8 +1,11 @@
-use crate::model::*;
+use crate::model::{Mark, RoundData, SHORTHAND, SPEECH_COLS, Side, SpeakingOrder, sheet_for};
 use crate::progress::RoundProgress;
 use crate::shorthand::{InsertCtx, TextTarget, insert_shorthand};
-use crate::state::*;
-use crate::timer::{TimerBank, TimerKind, fmt_time};
+use crate::state::{
+    RoundState, RowState, copy_text, load_initial, now_ms, print_page, save, save_progress,
+    timer_expired_feedback, unlock_audio,
+};
+use crate::timer::{TimerBank, TimerKind, ceil_secs, fmt_time};
 use crate::topic::{self, TopicAction};
 use gloo_timers::callback::Interval;
 use leptos::prelude::*;
@@ -72,6 +75,10 @@ impl PendingConfirm {
     }
 }
 
+// Pedantic `too_many_lines`: the Leptos root component owns every
+// round/timer signal and callback the view closes over; splitting it
+// would thread all of them through a child component for no gain.
+#[allow(clippy::too_many_lines)]
 #[component]
 pub fn App() -> impl IntoView {
     // Issue #13: pre-fill an empty topic field with the bundled NSDA
@@ -176,7 +183,7 @@ pub fn App() -> impl IntoView {
         if let (Some(end), Some(now)) = (deadline.get_value(), now_ms())
             && running.get_untracked()
         {
-            timer_secs.set(((end - now) / 1_000.0).ceil().max(0.0) as i32);
+            timer_secs.set(ceil_secs(end - now));
         }
         timer_bank.update(|b| b.bank_displayed(timer_secs.get_untracked()));
         persist_progress.run(());
@@ -192,7 +199,7 @@ pub fn App() -> impl IntoView {
         let next = next.min(guide_now.len() - 1);
         step.set(next);
         stop_timer();
-        let full = (guide_now[next].minutes * 60) as i32;
+        let full = (guide_now[next].minutes * 60).cast_signed();
         timer_bank.update(|b| {
             b.start_speech(full);
         });
@@ -244,7 +251,7 @@ pub fn App() -> impl IntoView {
                     ));
                     timer_expired_feedback(audio_ctx.get_value().as_ref());
                 } else {
-                    let secs = (remaining_ms / 1_000.0).ceil() as i32;
+                    let secs = ceil_secs(remaining_ms);
                     timer_secs.set(secs);
                     timer_bank.update(|b| b.bank_displayed(secs));
                 }

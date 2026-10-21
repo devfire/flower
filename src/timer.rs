@@ -19,6 +19,26 @@ pub fn fmt_time(secs: i32) -> String {
     format!("{}:{:02}", s / 60, s % 60)
 }
 
+/// Whole seconds to display for a millisecond remainder, rounded up so
+/// a partially elapsed second still counts. Non-positive (and NaN, via
+/// the saturating cast below) remainders display as 0; remainders past
+/// `i32::MAX` seconds saturate there instead of wrapping.
+#[must_use]
+// The cast is safe by construction: `secs` is clamped to
+// `0..=i32::MAX` above it, and Rust float-to-int `as` saturates (NaN
+// becomes 0) rather than wrapping. f64 has no `TryFrom` conversion.
+#[allow(clippy::cast_possible_truncation)]
+pub fn ceil_secs(remaining_ms: f64) -> i32 {
+    let secs = (remaining_ms / 1_000.0).ceil();
+    if secs <= 0.0 {
+        0
+    } else if secs >= f64::from(i32::MAX) {
+        i32::MAX
+    } else {
+        secs as i32
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum TimerKind {
     Speech,
@@ -49,7 +69,12 @@ impl TimerBank {
     /// can never resurrect more prep than a team starts with, or a
     /// negative speech remainder.
     #[must_use]
-    pub fn restored(speech_secs: i32, pro_prep_secs: i32, con_prep_secs: i32, active: TimerKind) -> Self {
+    pub fn restored(
+        speech_secs: i32,
+        pro_prep_secs: i32,
+        con_prep_secs: i32,
+        active: TimerKind,
+    ) -> Self {
         let mut bank = Self::new(speech_secs);
         bank.active = active;
         bank.pro_prep_secs = pro_prep_secs.clamp(0, PREP_SECS);
@@ -157,6 +182,19 @@ mod tests {
         assert_eq!(fmt_time(240), "4:00");
         assert_eq!(fmt_time(PREP_SECS), "3:00");
         assert_eq!(fmt_time(600), "10:00");
+    }
+
+    #[test]
+    fn ceil_secs_rounds_up_and_clamps() {
+        assert_eq!(ceil_secs(0.0), 0);
+        assert_eq!(ceil_secs(-1_500.0), 0);
+        assert_eq!(ceil_secs(f64::NAN), 0);
+        assert_eq!(ceil_secs(1.0), 1);
+        assert_eq!(ceil_secs(1_000.0), 1);
+        assert_eq!(ceil_secs(1_001.0), 2);
+        assert_eq!(ceil_secs(59_500.0), 60);
+        assert_eq!(ceil_secs(f64::INFINITY), i32::MAX);
+        assert_eq!(ceil_secs(f64::from(i32::MAX) * 1_000.0), i32::MAX);
     }
 
     #[test]

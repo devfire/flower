@@ -716,19 +716,19 @@ impl RoundData {
             ..Self::default()
         };
         let mut pro1 = RowData::new(10, "C1: Oceans 🌊");
-        pro1.cells[0].text = "Plastic → oceans, harms sea life".to_owned();
-        pro1.cells[3].text = "“Recycling fixes it” — only 9% recycled".to_owned();
+        "Plastic → oceans, harms sea life".clone_into(&mut pro1.cells[0].text);
+        "“Recycling fixes it” — only 9% recycled".clone_into(&mut pro1.cells[3].text);
         pro1.cells[3].mark = Mark::Extended;
-        pro1.cells[4].text = "➜ Extend: harm is permanent".to_owned();
+        "➜ Extend: harm is permanent".clone_into(&mut pro1.cells[4].text);
         pro1.cells[4].mark = Mark::Extended;
         let mut pro2 = RowData::new(11, "C2: Health 🧸");
-        pro2.cells[0].text = "Microplastics → drinking water".to_owned();
+        "Microplastics → drinking water".clone_into(&mut pro2.cells[0].text);
         pro2.cells[0].mark = Mark::Key;
         let mut con1 = RowData::new(12, "C1: Economy 💰");
-        con1.cells[1].text = "Ban → costs ↑ for small shops".to_owned();
-        con1.cells[2].text = "Shops adapt — paper is cheap now".to_owned();
+        "Ban → costs ↑ for small shops".clone_into(&mut con1.cells[1].text);
+        "Shops adapt — paper is cheap now".clone_into(&mut con1.cells[2].text);
         let mut con2 = RowData::new(13, "C2: Alternatives 🌱");
-        con2.cells[1].text = "Compostables replace plastic".to_owned();
+        "Compostables replace plastic".clone_into(&mut con2.cells[1].text);
         con2.cells[1].mark = Mark::Dropped;
         r.pro_rows = vec![pro1, pro2];
         r.con_rows = vec![con1, con2];

@@ -45,6 +45,10 @@ codegen-units = 1
 panic = "abort"
 
 [lints.clippy]
+# The AGENTS.md pedantic gate, encoded so local `cargo clippy` and CI
+# cannot diverge (issue #22). Priority -1 lets the specific lints below
+# keep their own levels.
+pedantic = { level = "warn", priority = -1 }
 unwrap_used = "warn"
 expect_used = "warn"
 # indexing_slicing intentionally off: all indices are clamped steps, enumerated

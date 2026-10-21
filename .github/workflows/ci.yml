@@ -38,8 +38,8 @@ jobs:
       - name: Format check
         run: cargo fmt --check
 
-      - name: Clippy (wasm target)
-        run: cargo clippy --target wasm32-unknown-unknown --all-targets -- -D warnings
+      - name: Clippy (wasm target, pedantic gate)
+        run: cargo clippy --target wasm32-unknown-unknown --all-targets -- -D warnings -D clippy::pedantic
 
       - name: Unit tests
         run: cargo test

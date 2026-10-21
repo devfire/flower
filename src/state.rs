@@ -4,7 +4,9 @@
 
 use std::cell::{Cell, RefCell};
 
-use crate::model::*;
+use crate::model::{
+    CellData, Mark, RoundData, RowData, STORAGE_BACKUP_KEY, STORAGE_KEY, Side, SpeakingOrder,
+};
 use crate::progress::{PROGRESS_STORAGE_KEY, RoundProgress};
 use gloo_timers::callback::Timeout;
 use leptos::prelude::*;

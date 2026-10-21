@@ -109,7 +109,12 @@ pub enum TopicAction {
 /// cleared after spawn no longer equals `spawned`, so it is only offered
 /// the candidate, never refilled.
 #[must_use]
-pub fn decide(current: &str, auto_filled: &str, spawned: &str, candidate: &NsdaTopic) -> TopicAction {
+pub fn decide(
+    current: &str,
+    auto_filled: &str,
+    spawned: &str,
+    candidate: &NsdaTopic,
+) -> TopicAction {
     let current = current.trim();
     if current == candidate.resolution.trim() {
         TopicAction::UpToDate

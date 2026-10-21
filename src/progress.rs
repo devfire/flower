@@ -49,7 +49,13 @@ impl RoundProgress {
     /// Snapshot the live App signals. `displayed` is the on-screen timer
     /// value; `bank` holds the remainders of the timers not on screen.
     #[must_use]
-    pub fn capture(step: usize, tab: Side, focus_mode: bool, displayed: i32, bank: TimerBank) -> Self {
+    pub fn capture(
+        step: usize,
+        tab: Side,
+        focus_mode: bool,
+        displayed: i32,
+        bank: TimerBank,
+    ) -> Self {
         Self {
             step,
             tab,
@@ -93,7 +99,12 @@ impl RoundProgress {
     #[must_use]
     pub fn timer_bank(&self) -> TimerBank {
         let active = self.active_prep.map_or(TimerKind::Speech, TimerKind::Prep);
-        TimerBank::restored(self.speech_secs, self.pro_prep_secs, self.con_prep_secs, active)
+        TimerBank::restored(
+            self.speech_secs,
+            self.pro_prep_secs,
+            self.con_prep_secs,
+            active,
+        )
     }
 
     /// Seconds the timer display should show on load: the on-screen
