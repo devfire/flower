@@ -95,7 +95,11 @@ impl RoundState {
     pub fn from_data(data: RoundData) -> Self {
         // Defence in depth: every entry path (saved, sample, default) gets
         // the cell-count / id invariants before the UI can index by column.
-        let data = data.normalised();
+        // Saved data reaches here only via `from_saved_json`, which already
+        // rejected id-exhausted rounds; other callers pass default/sample
+        // data. A pathological in-code round falls back to the blank
+        // default rather than trapping the wasm app with duplicate ids.
+        let data = data.try_normalised().unwrap_or_default();
         Self {
             topic: RwSignal::new(data.topic),
             pro_team: RwSignal::new(data.pro_team),
@@ -193,7 +197,13 @@ impl RoundState {
 
     pub fn add_row(&self, side: Side) {
         let id = self.next_id.get_untracked();
-        self.next_id.set(id + 1);
+        // `next_id == u32::MAX` (a hand-edited save may set it) has no
+        // successor: adding the row would panic on `id + 1` in debug or
+        // wrap to an id already in use in release. Refuse instead.
+        let Some(next) = id.checked_add(1) else {
+            return;
+        };
+        self.next_id.set(next);
         self.rows(side)
             .update(|rows| rows.push(RowState::from_data(&RowData::new(id, ""))));
         save(self);

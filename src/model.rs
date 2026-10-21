@@ -443,23 +443,37 @@ impl RoundData {
     /// Parse a saved round, repairing anything a truncated, older, or
     /// hand-edited save may contain. Only genuinely unparseable JSON (or a
     /// field of the wrong type) is an `Err`; callers must preserve the raw
-    /// text in that case rather than overwrite it.
+    /// text in that case rather than overwrite it. A save whose row ids
+    /// exhaust the `u32` id space (see `try_normalised`) is likewise an
+    /// `Err`, so it takes the same preserved-save recovery path.
     ///
     /// # Errors
     /// Returns the `serde_json` error when `json` is not a readable round.
     pub fn from_saved_json(json: &str) -> Result<Self, serde_json::Error> {
-        serde_json::from_str(json).map(Self::normalised)
+        use serde::de::Error as _;
+        serde_json::from_str::<Self>(json)?
+            .try_normalised()
+            .ok_or_else(|| {
+                serde_json::Error::custom("row ids exhausted: no fresh row id available")
+            })
     }
 
     /// Restore the invariants the UI relies on: exactly `SPEECH_COLS.len()`
     /// cells per row (pad short rows, drop extra cells), unique row ids
     /// (later duplicates get fresh ids), and `next_id` above every row id
     /// so a future row can never reuse one.
+    ///
+    /// Returns `None` when the id space is exhausted — some row already
+    /// holds `u32::MAX`, so no fresh duplicate repair and no `next_id`
+    /// above it exist. Silently saturating there would keep duplicate
+    /// ids (one delete would remove both rows) or hand `next_id` back
+    /// as an id already in use.
     #[must_use]
-    pub fn normalised(mut self) -> Self {
+    pub fn try_normalised(mut self) -> Option<Self> {
         use std::collections::HashSet;
         // Fresh ids start above every existing id, so a repaired duplicate
-        // can never collide with a row not visited yet.
+        // can never collide with a row not visited yet. `checked_add`
+        // failing means a row holds MAX: bail before any repair.
         let mut fresh = self
             .pro_rows
             .iter()
@@ -467,13 +481,13 @@ impl RoundData {
             .map(|r| r.id)
             .max()
             .unwrap_or(0)
-            .saturating_add(1);
+            .checked_add(1)?;
         let mut seen = HashSet::new();
         for row in self.pro_rows.iter_mut().chain(self.con_rows.iter_mut()) {
             if !seen.insert(row.id) {
                 row.id = fresh;
                 seen.insert(fresh);
-                fresh = fresh.saturating_add(1);
+                fresh = fresh.checked_add(1)?;
             }
             row.cells.resize_with(SPEECH_COLS.len(), CellData::default);
         }
@@ -484,8 +498,10 @@ impl RoundData {
             .map(|r| r.id)
             .max()
             .unwrap_or(0);
-        self.next_id = self.next_id.max(max_id.saturating_add(1));
-        self
+        // A repaired duplicate may itself have taken MAX, leaving no
+        // usable next_id even though every id is now unique.
+        self.next_id = self.next_id.max(max_id.checked_add(1)?);
+        Some(self)
     }
 
     /// True when nothing a judge typed or marked would be lost by replacing
@@ -847,11 +863,13 @@ mod tests {
         let mut narrow = RowData::new(2, "narrow");
         narrow.cells.truncate(3);
         narrow.cells[2].text = "last kept".to_owned();
-        let round = RoundData {
+        let Some(round) = RoundData {
             pro_rows: vec![wide, narrow],
             ..RoundData::default()
         }
-        .normalised();
+        .try_normalised() else {
+            panic!("ordinary ids must normalise");
+        };
         assert_eq!(round.pro_rows[0].cells.len(), SPEECH_COLS.len());
         assert_eq!(round.pro_rows[0].cells[7].text, "c7");
         assert_eq!(round.pro_rows[1].cells.len(), SPEECH_COLS.len());
@@ -861,13 +879,15 @@ mod tests {
 
     #[test]
     fn duplicate_row_ids_are_repaired_and_next_id_clamped_above_them() {
-        let round = RoundData {
+        let Some(round) = RoundData {
             pro_rows: vec![RowData::new(2, "a"), RowData::new(2, "b")],
             con_rows: vec![RowData::new(2, "c"), RowData::new(9, "d")],
             next_id: 1,
             ..RoundData::default()
         }
-        .normalised();
+        .try_normalised() else {
+            panic!("ordinary ids must normalise");
+        };
         let ids: Vec<u32> = round
             .pro_rows
             .iter()
@@ -878,6 +898,22 @@ mod tests {
         assert_eq!(unique.len(), ids.len(), "duplicate ids remain: {ids:?}");
         assert_eq!(round.pro_rows[0].id, 2, "first occurrence keeps its id");
         assert!(round.next_id > *ids.iter().max().unwrap_or(&0));
+    }
+
+    #[test]
+    fn max_row_ids_take_the_unreadable_save_path_not_duplicate_ids() {
+        // No u32 exists above MAX, so neither a duplicate repair nor a
+        // usable next_id is possible: the save must be rejected (and
+        // preserved by the recovery path), never loaded with duplicates.
+        let duplicate_max = r#"{"pro_rows":[{"id":4294967295},{"id":4294967295}]}"#;
+        assert!(RoundData::from_saved_json(duplicate_max).is_err());
+        let lone_max = r#"{"pro_rows":[{"id":4294967295}]}"#;
+        assert!(RoundData::from_saved_json(lone_max).is_err());
+        // One below the ceiling still loads, with next_id exactly at it.
+        let Ok(loaded) = RoundData::from_saved_json(r#"{"pro_rows":[{"id":4294967294}]}"#) else {
+            panic!("MAX-1 save must load");
+        };
+        assert_eq!(loaded.next_id, u32::MAX);
     }
 
     #[test]
