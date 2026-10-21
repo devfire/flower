@@ -1,8 +1,18 @@
 #![forbid(unsafe_code)]
 
+mod analysis;
 mod app;
+mod ballot;
+mod confirm;
+mod flow_sheet;
+mod guide;
+mod hero;
 mod model;
+mod persistence;
+mod platform;
 mod progress;
+mod round_save;
+mod setup_card;
 mod shorthand;
 mod state;
 mod timer;

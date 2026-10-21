@@ -1,81 +1,19 @@
-use crate::model::{
-    DroppedArgument, Mark, RoundData, SHORTHAND, SPEECH_COLS, Side, SpeakingOrder, sheet_for,
-};
+use crate::ballot::{BallotProps, ballot_card};
+use crate::confirm::{PendingConfirm, confirm_dialog};
+use crate::flow_sheet::FlowSheet;
+use crate::hero::{HeroProps, hero_header};
+use crate::model::{RoundData, SHORTHAND, Side, SpeakingOrder, sheet_for};
 use crate::progress::RoundProgress;
+use crate::setup_card::{SetupProps, setup_card};
 use crate::shorthand::{InsertCtx, TextTarget, insert_shorthand};
 use crate::state::{
-    RoundState, RowState, copy_text, load_initial, now_ms, print_page, save, save_progress,
-    timer_expired_feedback, unlock_audio,
+    RoundState, load_initial, now_ms, save, save_progress, timer_expired_feedback, unlock_audio,
 };
-use crate::timer::{TimerBank, TimerKind, ceil_secs, fmt_time, tick_secs};
+use crate::timer::{TimerBank, TimerKind, ceil_secs, tick_secs};
 use crate::topic::{self, TopicAction};
 use gloo_timers::callback::Interval;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
-
-fn placeholder_for(sheet: Side, col: usize) -> &'static str {
-    let speech_side = SPEECH_COLS[col].side;
-    match col {
-        0 | 1 => "Claim + why it matters…\ne.g. “Plastic → oceans”",
-        4 | 5 => "➜ Extend: repeat the argument\n+ answer their best reply…",
-        6 | 7 => "⚖️ “Vote for us because…”\ntheir #1 reason + weighing…",
-        _ if speech_side == sheet => "Defend: answer their reply…",
-        _ => "↩️ Their answer to this argument…\n(leave blank = dropped 💤)",
-    }
-}
-
-/// Destructive actions that ask in the shared in-UI dialog before
-/// running, instead of the native `window.confirm` (which appears
-/// wherever the browser puts it and matches nothing else on the page).
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum PendingConfirm {
-    NewRound,
-    ExampleRound,
-    ResetPrep(Side),
-}
-
-impl PendingConfirm {
-    fn title(self) -> &'static str {
-        match self {
-            Self::NewRound => "Start a brand-new round?",
-            Self::ExampleRound => "Load the example round?",
-            Self::ResetPrep(Side::Pro) => "Reset Pro prep?",
-            Self::ResetPrep(Side::Con) => "Reset Con prep?",
-        }
-    }
-
-    fn body(self) -> &'static str {
-        match self {
-            Self::NewRound => {
-                "This clears the current flow and resets both prep timers. It can't be undone."
-            }
-            Self::ExampleRound => "This replaces the current flow. It can't be undone.",
-            Self::ResetPrep(Side::Pro) => {
-                "This resets only Pro prep back to 3:00. Con prep is untouched."
-            }
-            Self::ResetPrep(Side::Con) => {
-                "This resets only Con prep back to 3:00. Pro prep is untouched."
-            }
-        }
-    }
-
-    fn keep_label(self) -> &'static str {
-        match self {
-            Self::NewRound => "Keep current round",
-            Self::ExampleRound => "Keep current flow",
-            Self::ResetPrep(_) => "Keep prep time",
-        }
-    }
-
-    fn confirm_label(self) -> &'static str {
-        match self {
-            Self::NewRound => "Start new round",
-            Self::ExampleRound => "Load example round",
-            Self::ResetPrep(Side::Pro) => "Reset Pro prep",
-            Self::ResetPrep(Side::Con) => "Reset Con prep",
-        }
-    }
-}
 
 // Pedantic `too_many_lines`: the Leptos root component owns every
 // round/timer signal and callback the view closes over; splitting it
@@ -225,7 +163,7 @@ pub fn App() -> impl IntoView {
             set_step.run(i);
         }
     });
-    let toggle_timer = move |_| {
+    let toggle_timer = move |_: web_sys::MouseEvent| {
         if running.get_untracked() {
             stop_timer();
         } else if timer_secs.get_untracked() > 0 {
@@ -296,7 +234,7 @@ pub fn App() -> impl IntoView {
     // Shared Reset: in prep it only returns to the (preserved) speech
     // timer — it must never silently refill prep. During a speech it
     // restarts that speech's full time, as before.
-    let reset_or_back = move |_| {
+    let reset_or_back = move |_: web_sys::MouseEvent| {
         stop_timer();
         if matches!(timer_bank.get_untracked().active(), TimerKind::Prep(_)) {
             // Read the banked speech remainder before Speech becomes the
@@ -326,12 +264,8 @@ pub fn App() -> impl IntoView {
 
     let st_flow = state.clone();
     let st_notice = state.clone();
-    let st_saved = state.clone();
-    let st_sample = state.clone();
     let st_confirm = state.clone();
     let st_clear = state.clone();
-    let st_export = state.clone();
-    let st_topic = state.clone();
     let st_order = state.clone();
     // Speaking-order switch: the step is a speaking position, so it
     // stays put; re-point the sheet and speech label at that step in
@@ -406,64 +340,12 @@ pub fn App() -> impl IntoView {
 
     view! {
         <div class="page">
-            <header class="hero">
-                <div class="hero-mascot" aria-hidden="true">""</div>
-                <div class="hero-text">
-                    <h1>"Flow-er" <span class="hero-sub">"easy flowing for PF judges"</span></h1>
-                    <p class="hero-tag">
-                        "New to flowing? Perfect — you're exactly who this is for. "
-                        "Follow the speech, follow the arrows ➜, and let Momo-chan's bubbles tell you what to write."
-                    </p>
-                </div>
-                <div class="hero-actions no-print">
-                    <button class="btn btn-soft" aria-haspopup="dialog"
-                        aria-expanded=move || if pending_confirm.get() == Some(PendingConfirm::ExampleRound) { "true" } else { "false" }
-                        on:click=move |_| {
-                            // An empty flow has nothing to lose, so the
-                            // example loads straight away; only a flow
-                            // with content asks first.
-                            if st_sample.snapshot().is_empty() {
-                                st_sample.replace(RoundData::sample());
-                                save(&st_sample);
-                                reset_round_walk.run(());
-                            } else {
-                                pending_confirm.set(Some(PendingConfirm::ExampleRound));
-                            }
-                        }>
-                        "See an example round"
-                    </button>
-                    <button class="btn btn-soft" aria-haspopup="dialog"
-                        aria-expanded=move || if pending_confirm.get() == Some(PendingConfirm::NewRound) { "true" } else { "false" }
-                        on:click=move |_| pending_confirm.set(Some(PendingConfirm::NewRound))>"New round"</button>
-                    <button class="btn btn-soft" on:click=move |_| print_page()>"🖨️ Print / save PDF"</button>
-                </div>
-            </header>
-
-            {move || pending_confirm.get().map(|pending| { let app_owner = app_owner.clone(); view! {
-                <div class="confirm-overlay no-print" on:click=move |_| pending_confirm.set(None)>
-                    <div class="confirm-dialog" role="alertdialog" aria-modal="true"
-                        aria-labelledby="confirm-title" aria-describedby="confirm-desc"
-                        on:click=move |ev| ev.stop_propagation()
-                        on:keydown=move |ev| {
-                            if ev.key() == "Escape" { pending_confirm.set(None); }
-                        }>
-                        <h2 id="confirm-title">{pending.title()}</h2>
-                        <p id="confirm-desc">{pending.body()}</p>
-                        <div class="confirm-actions">
-                            <button class="btn btn-soft" node_ref=keep_confirm_button
-                                on:click=move |_| pending_confirm.set(None)>{pending.keep_label()}</button>
-                            <button class="btn btn-danger" on:click=move |_| {
-                                pending_confirm.set(None);
-                                match &app_owner {
-                                    Some(owner) => owner.with(|| confirm_action.run(pending)),
-                                    None => confirm_action.run(pending),
-                                }
-                            }>{pending.confirm_label()}</button>
-                        </div>
-                    </div>
-                </div>
-            } })}
-
+            {hero_header(HeroProps {
+                state: state.clone(),
+                pending_confirm,
+                reset_round_walk,
+            })}
+            {confirm_dialog(pending_confirm, keep_confirm_button, app_owner, confirm_action)}
             {move || st_notice.recovery_notice.get().map(|notice| {
                 let s = st_notice.clone();
                 view! {
@@ -478,117 +360,23 @@ pub fn App() -> impl IntoView {
 
             <main>
             // ---------- Round setup ----------
-            <section class="card setup-card">
-                <h2><span class="card-ico">""</span> "1 · Set up the round" <span class="saved-note" class:saved-note-failed=move || st_saved.save_failed.get()>{move || if st_saved.save_failed.get() { "⚠️ Not saved — this browser is blocking or out of storage; copy anything important before closing" } else { "✓ auto-saves on this device" }}</span></h2>
-                <div class="setup-layout">
-                <div class="setup-grid">
-                    <label class="field field-wide">
-                        <span>"Resolution / topic"</span>
-                        <input type="text" id="field-topic" placeholder="Resolved: …"
-                            on:focus=move |_| insert_ctx.focus(TextTarget::Topic)
-                            prop:value=move || state.topic.get()
-                            on:input={let s = state.clone(); move |ev| { s.topic.set(event_target_value(&ev)); save(&s); }} />
-                    </label>
-                    <div class="field-wide topic-row">
-                        {move || {
-                            let nsda = nsda_topic.get();
-                            let current = st_topic.topic.get();
-                            let offered = !current.trim().is_empty()
-                                && current.trim() != nsda.resolution.trim();
-                            let note = format!("\u{1f338} {}", nsda.provenance());
-                            if offered {
-                                let s = st_topic.clone();
-                                let resolution = nsda.resolution.clone();
-                                view! {
-                                    <>
-                                        <p class="topic-note">{note}</p>
-                                        <button class="btn btn-soft btn-chip" on:click=move |_| {
-                                            s.topic.set(resolution.clone());
-                                            save(&s);
-                                        }>"Use current NSDA resolution"</button>
-                                    </>
-                                }.into_any()
-                            } else {
-                                view! { <p class="topic-note">{note}</p> }.into_any()
-                            }
-                        }}
-                    </div>
-                    <label class="field">
-                        <span>"Pro team"</span>
-                        <input type="text" id="field-pro-team" placeholder="School / speaker names"
-                            on:focus=move |_| insert_ctx.focus(TextTarget::ProTeam)
-                            prop:value=move || state.pro_team.get()
-                            on:input={let s = state.clone(); move |ev| { s.pro_team.set(event_target_value(&ev)); save(&s); }} />
-                    </label>
-                    <label class="field">
-                        <span>"Con team"</span>
-                        <input type="text" id="field-con-team" placeholder="School / speaker names"
-                            on:focus=move |_| insert_ctx.focus(TextTarget::ConTeam)
-                            prop:value=move || state.con_team.get()
-                            on:input={let s = state.clone(); move |ev| { s.con_team.set(event_target_value(&ev)); save(&s); }} />
-                    </label>
-                </div>
-
-                    <div class="bubble-wrap no-print">
-                        <div class="bubble">
-                            <p class="bubble-title">
-                                {move || guide.get()[step.get()].title}
-                                <span class="bubble-time">{move || format!(" · {} min", guide.get()[step.get()].minutes)}</span>
-                            </p>
-                            <p class="bubble-main">{move || guide.get()[step.get()].bubble}</p>
-                            <ul class="bubble-list">
-                                <li><b>"Listen for: "</b>{move || guide.get()[step.get()].listen_for}</li>
-                                <li><b>"Write: "</b>{move || guide.get()[step.get()].do_it}</li>
-                                <li><b>"Watch out: "</b>{move || guide.get()[step.get()].watch_out}</li>
-                            </ul>
-                        </div>
-                    </div>
-
-                    <div class="timer-box no-print">
-                        <div class="timer-head">
-                            <div class="timer-readout">
-                                <div class="timer-label">{move || timer_label.get()}</div>
-                                <div class="timer-digits" role="timer" aria-label=move || format!("{}: {} remaining", timer_label.get(), fmt_time(timer_secs.get())) class:timer-done=move || timer_secs.get() == 0>
-                                    {move || fmt_time(timer_secs.get())}
-                                </div>
-                            </div>
-                            <div class="sr-only" role="status" aria-live="polite">
-                                {move || timer_announcement.get()}
-                            </div>
-                            <div class="timer-btns">
-                                <button class="btn btn-main" on:click=toggle_timer>
-                                    {move || if running.get() { "⏸ Pause" } else { "▶ Start" }}
-                                </button>
-                                <button class="btn btn-soft" on:click=reset_or_back>
-                                    {move || if matches!(timer_bank.get().active(), TimerKind::Prep(_)) { "↺ Back to speech" } else { "↺ Reset" }}
-                                </button>
-                            </div>
-                        </div>
-                        <div class="prep-row">
-                            <span>"Prep left (3m/team):"</span>
-                            <button class="btn btn-chip btn-pro" on:click=move |_| start_prep(Side::Pro)>
-                                {move || format!("Pro · {}", fmt_time(timer_bank.get().secs_for(TimerKind::Prep(Side::Pro), timer_secs.get())))}
-                            </button>
-                            <button class="btn btn-chip" title="Reset only Pro prep back to 3:00" aria-label="Reset only Pro prep back to 3:00" aria-haspopup="dialog"
-                                aria-expanded=move || if pending_confirm.get() == Some(PendingConfirm::ResetPrep(Side::Pro)) { "true" } else { "false" }
-                                on:click=move |_| pending_confirm.set(Some(PendingConfirm::ResetPrep(Side::Pro)))>"↺ "</button>
-                            <button class="btn btn-chip btn-con" on:click=move |_| start_prep(Side::Con)>
-                                {move || format!("Con · {}", fmt_time(timer_bank.get().secs_for(TimerKind::Prep(Side::Con), timer_secs.get())))}
-                            </button>
-                            <button class="btn btn-chip" title="Reset only Con prep back to 3:00" aria-label="Reset only Con prep back to 3:00" aria-haspopup="dialog"
-                                aria-expanded=move || if pending_confirm.get() == Some(PendingConfirm::ResetPrep(Side::Con)) { "true" } else { "false" }
-                                on:click=move |_| pending_confirm.set(Some(PendingConfirm::ResetPrep(Side::Con)))>"↺"</button>
-                        </div>
-                        <div class="step-nav">
-                            <button class="btn btn-soft" disabled={move || step.get() == 0}
-                                on:click=move |_| set_step.run(step.get_untracked().saturating_sub(1))>"⬅ Prev speech"</button>
-                            <button class="btn btn-main" disabled={move || step.get() >= guide.get().len() - 1}
-                                on:click=move |_| set_step.run(step.get_untracked() + 1)>"Next speech ➜"</button>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
+            {setup_card(SetupProps {
+                state: state.clone(),
+                nsda_topic,
+                insert_ctx,
+                guide,
+                step,
+                timer_label,
+                timer_secs,
+                timer_announcement,
+                running,
+                timer_bank,
+                pending_confirm,
+                set_step,
+                toggle_timer,
+                reset_or_back,
+                start_prep,
+            })}
             // ---------- Flow sheets ----------
             <section class="card flow-card">
                 <h2><span class="card-ico">""</span> "2 · Your flow" </h2>
@@ -677,301 +465,17 @@ pub fn App() -> impl IntoView {
             </section>
 
             // ---------- Decision ----------
-            <section class="card ballot-card">
-                <h2>"3 · Your decision" </h2>
-                <p class="ballot-intro">"No perfect flow required. Ask three questions:"</p>
-                <ol class="ballot-qs">
-                    <li>"Which arguments were " <b>"answered the least"</b> " (💤 dropped or weakly answered)?"</li>
-                    <li>"Which side " <b>"extended"</b> " ➜ their arguments into Summary & Final Focus?"</li>
-                    <li>"In Final Focus, who gave the better " <b>"weighing"</b> " ⚖️ — bigger, sooner, or more likely impact?"</li>
-                </ol>
-                <DroppedHints state=state.clone() step=step />
-                <div class="winner-row no-print">
-                    <span>"I vote for:"</span>
-                    <button class="btn winner-btn btn-pro" class:winner-on=move || state.winner.get() == Some(Side::Pro) aria-pressed=move || if state.winner.get() == Some(Side::Pro) { "true" } else { "false" }
-                        on:click={let s = state.clone(); move |_| { s.winner.set(Some(Side::Pro)); save(&s); }}>"Pro"</button>
-                    <button class="btn winner-btn btn-con" class:winner-on=move || state.winner.get() == Some(Side::Con) aria-pressed=move || if state.winner.get() == Some(Side::Con) { "true" } else { "false" }
-                        on:click={let s = state.clone(); move |_| { s.winner.set(Some(Side::Con)); save(&s); }}>"Con"</button>
-                </div>
-                <p class="winner-print">{move || match state.winner.get() {
-                    None => "Winner: __________".to_string(),
-                    Some(w) => format!("Winner: {}", w.label()),
-                }}</p>
-                <label class="field">
-                    <span>"Reason for decision (say it in plain words — debaters learn from this!) 🗣️"</span>
-                    <textarea class="big-notes" id="notes-rfd" rows="4" aria-label="Reason for decision"
-                        on:focus=move |_| insert_ctx.focus(TextTarget::Rfd)
-                        placeholder="“I voted ___ because the ___ argument was dropped / extended / weighed better when…”"
-                        prop:value=move || state.rfd.get()
-                        on:input={let s = state.clone(); move |ev| { s.rfd.set(event_target_value(&ev)); save(&s); }}></textarea>
-                    <div class="notes-print" aria-hidden="true">{move || state.rfd.get()}</div>
-                </label>
-                <div class="ballot-actions no-print">
-                    <button class="btn btn-main" on:click=move |_| {
-                        let text = decision_text(&st_export);
-                        spawn_local(async move {
-                            copy_feedback.set(Some(if copy_text(&text).await {
-                                "Copied ✓"
-                            } else {
-                                "⚠️ Copy failed — clipboard blocked by the browser"
-                            }));
-                        });
-                    }>"📋 Copy decision summary"</button>
-                    <span class="copy-feedback" role="status" aria-live="polite">{move || copy_feedback.get().unwrap_or("")}</span>
-                    <button class="btn btn-soft" on:click=move |_| print_page()>"🖨️ Print flow + ballot"</button>
-                </div>
-            </section>
-
+            {ballot_card(BallotProps {
+                state: state.clone(),
+                step,
+                insert_ctx,
+                copy_feedback,
+            })}
             </main>
 
             <footer class="footer">
                 <p class="footer-small">"Your flow auto-saves only in this browser (localStorage) — nothing leaves your device."</p>
             </footer>
         </div>
-    }
-}
-
-fn decision_text(state: &RoundState) -> String {
-    state.snapshot().decision_text()
-}
-
-fn dropped_hint(d: &DroppedArgument) -> String {
-    let mut hint = if d.explicit {
-        format!(
-            "💤 {}'s “{}” — you marked this dropped; no {} answer counts against it.",
-            d.owner.label(),
-            d.name,
-            d.answerer.label()
-        )
-    } else {
-        format!(
-            "💤 {}'s “{}” got no {} answer in any speech so far",
-            d.owner.label(),
-            d.name,
-            d.answerer.label()
-        )
-    };
-    if d.extended {
-        hint.push_str(" ➜ It was extended — that can decide the round.");
-    } else if !d.explicit {
-        hint.push_str(" — if it was extended, it may decide the round.");
-    }
-    if d.key {
-        hint.push_str(" ⭐ You starred it as key.");
-    }
-    hint
-}
-
-#[component]
-fn DroppedHints(state: RoundState, step: RwSignal<usize>) -> impl IntoView {
-    // Memo over only the real inputs (speaking order, row titles/cells,
-    // guide step): typing in the topic, crossfire, or RFD boxes never
-    // re-derives hints, and the `Eq` hint list suppresses the downstream
-    // DOM rebuild whenever the computed hints are unchanged.
-    let hints = Memo::new(move |_| {
-        state
-            .dropped_arguments_tracked(step.get())
-            .iter()
-            .map(dropped_hint)
-            .collect::<Vec<String>>()
-    });
-    move || {
-        let hints = hints.get();
-        if hints.is_empty() {
-            view! { <p class="dropped-none">"✨ No clearly dropped arguments spotted yet — check for blank answer boxes on each row."</p> }.into_any()
-        } else {
-            view! {
-                <div class="dropped-box">
-                    <p class="dropped-title">"🔎 Arguments that look dropped (blank answer box or 💤 mark):"</p>
-                    <ul>{hints.into_iter().map(|h| view! { <li>{h}</li> }).collect_view()}</ul>
-                </div>
-            }.into_any()
-        }
-    }
-}
-
-#[component]
-fn FlowSheet(
-    state: RoundState,
-    side: Side,
-    speaking_order: Signal<SpeakingOrder>,
-    current_col: Option<Signal<Option<usize>>>,
-    focus_mode: RwSignal<bool>,
-    insert_ctx: Option<InsertCtx>,
-    on_speech_click: Option<Callback<usize>>,
-) -> impl IntoView {
-    let rows = state.rows(side);
-    let sheet_class = match side {
-        Side::Pro => "sheet sheet-pro",
-        Side::Con => "sheet sheet-con",
-    };
-    view! {
-        <div class=sheet_class>
-            <div class="flow-scroll">
-                <div class="flow-grid" style=format!("grid-template-columns: minmax(8rem, 11rem) repeat({}, minmax(6.5rem, 1fr));", SPEECH_COLS.len())>
-                    <div class="fh fh-corner" style="grid-column: 1; grid-row: 1;">
-                        {format!("{} arguments ↓", side.label())}
-                        <span class="fh-sub">"one row = one argument"</span>
-                    </div>
-                    {(0..SPEECH_COLS.len()).map(|col| {
-                        let sc = SPEECH_COLS[col];
-                        // Canonical render + CSS grid placement (issue #26):
-                        // a speaking-order flip only restyles these nodes,
-                        // never remounts the textareas below them.
-                        let grid_style = move || format!("grid-column: {}; grid-row: 1;", speaking_order.get().grid_column(col));
-                        let has_arrow = move || speaking_order.get().position_of(col).unwrap_or(col) > 0;
-                        let is_now = move || current_col.is_some_and(|signal| signal.get() == Some(col));
-                        let dim = move || {
-                            focus_mode.get()
-                                && current_col
-                                    .is_some_and(|signal| matches!(signal.get(), Some(cur) if cur != col))
-                        };
-                        match on_speech_click {
-                            Some(on_click) => view! {
-                                <button type="button" class="fh fh-click" class:fh-now=is_now class:fh-dim=dim style=grid_style
-                                    aria-current=move || is_now().then_some("step")
-                                    title=format!("Go to {}", sc.full)
-                                    on:click=move |_| on_click.run(col)>
-                                    {move || has_arrow().then(|| view! { <span class="fh-arrow" aria-hidden="true">"➜"</span> })}
-                                    {move || is_now().then(|| view! { <span class="fh-badge">"✏️ you are here"</span> })}
-                                    <span class="fh-name">{sc.full}</span>
-                                    <span class="fh-sub">{format!("{} min", sc.minutes)}</span>
-                                </button>
-                            }.into_any(),
-                            None => view! {
-                                <div class="fh" class:fh-now=is_now class:fh-dim=dim style=grid_style>
-                                    {move || is_now().then(|| view! { <span class="fh-badge">"✏️ you are here"</span> })}
-                                    <span class="fh-name">{sc.full}</span>
-                                    <span class="fh-sub">{format!("{} min", sc.minutes)}</span>
-                                </div>
-                            }.into_any(),
-                        }
-                    }).collect_view()}
-
-                    {let s = state.clone(); move || rows.get().into_iter().enumerate().map(|(idx, row)| {
-                        view! { <FlowRow state=s.clone() side=side row=row row_index=idx + 1 speaking_order=speaking_order current_col=current_col focus_mode=focus_mode insert_ctx=insert_ctx /> }
-                    }).collect_view()}
-                </div>
-            </div>
-            <button class="btn btn-main add-row no-print" on:click={let s = state.clone(); move |_| s.add_row(side)}>
-                "➕ Add an argument row"
-            </button>
-            <p class="sheet-tip no-print">
-                {match side {
-                    Side::Pro => "Tip: start a new row each time Pro says “our next contention is…”. ",
-                    Side::Con => "Tip: start a new row each time Con says “our next contention is…”. ",
-                }}
-            </p>
-        </div>
-    }
-}
-
-#[component]
-fn FlowRow(
-    state: RoundState,
-    side: Side,
-    row: RowState,
-    row_index: usize,
-    speaking_order: Signal<SpeakingOrder>,
-    current_col: Option<Signal<Option<usize>>>,
-    focus_mode: RwSignal<bool>,
-    insert_ctx: Option<InsertCtx>,
-) -> impl IntoView {
-    let row_id = row.id;
-    let title_target = TextTarget::RowTitle { side, row_id };
-    let title_id = insert_ctx.map(|_| title_target.id());
-    // Inline delete confirmation, anchored to the ✕ below: the native
-    // `window.confirm` dialog appears wherever the browser puts it,
-    // far from the row the judge is looking at.
-    let confirming_delete = RwSignal::new(false);
-    let keep_button = NodeRef::<leptos::html::Button>::new();
-    Effect::new(move |_| {
-        let keep = confirming_delete.get().then(|| keep_button.get()).flatten();
-        if let Some(button) = keep {
-            let _ = button.focus();
-        }
-    });
-    view! {
-        <div class="fr-title" style=format!("grid-column: 1; grid-row: {};", row_index + 1)>
-            <input type="text" id=title_id placeholder="Contention name…" aria-label=format!("{} argument {} title", side.label(), row_index)
-                on:focus=move |_| if let Some(ctx) = insert_ctx { ctx.focus(title_target) }
-                prop:value=move || row.title.get()
-                on:input={let s = state.clone(); let r = row.clone(); move |ev| { r.title.set(event_target_value(&ev)); save(&s); }} />
-            <div class="title-print" aria-hidden="true">{move || row.title.get()}</div>
-            <div class="row-del-wrap no-print"
-                on:keydown=move |ev| {
-                    if ev.key() == "Escape" { confirming_delete.set(false); }
-                }>
-                <button class="row-del" class:row-del-armed=move || confirming_delete.get()
-                    title="Delete this argument row" aria-label=format!("Delete {} argument {} row", side.label(), row_index)
-                    aria-expanded=move || if confirming_delete.get() { "true" } else { "false" }
-                    on:click=move |_| {
-                        confirming_delete.update(|armed| *armed = !*armed);
-                    }>"✕"</button>
-                {{let state = state.clone(); move || confirming_delete.get().then(|| {
-                    let s = state.clone();
-                    view! {
-                        <div class="row-del-pop" role="alertdialog"
-                            aria-label=format!("Confirm deleting {} argument {}", side.label(), row_index)>
-                            <span class="row-del-q">"Delete this row?"</span>
-                            <span class="row-del-actions">
-                                <button class="row-del-confirm" on:click={let s = s.clone(); move |_| {
-                                    confirming_delete.set(false);
-                                    s.remove_row(side, row_id);
-                                }}>"Delete"</button>
-                                <button class="row-del-keep" node_ref=keep_button
-                                    on:click=move |_| confirming_delete.set(false)>"Keep"</button>
-                            </span>
-                        </div>
-                    }
-                })}}
-            </div>
-        </div>
-        {let r = row.clone(); (0..SPEECH_COLS.len()).map(|col| {
-            let cell = r.cells[col];
-            let row = r.clone();
-            let grid_style = move || format!("grid-column: {}; grid-row: {};", speaking_order.get().grid_column(col), row_index + 1);
-            let has_arrow = move || speaking_order.get().position_of(col).unwrap_or(col) > 0;
-            let is_now = move || current_col.is_some_and(|signal| signal.get() == Some(col));
-            let dim = move || {
-                focus_mode.get()
-                    && current_col
-                        .is_some_and(|signal| matches!(signal.get(), Some(cur) if cur != col))
-            };
-            let placeholder = placeholder_for(side, col);
-            let title_signal = row.title;
-            let cell_target = TextTarget::FlowCell { side, row_id, col };
-            let cell_id = insert_ctx.map(|_| cell_target.id());
-            view! {
-                <div class="cell" class:cell-now=is_now class:cell-dim=dim style=grid_style
-                    class:cell-dropped=move || cell.mark.get() == Mark::Dropped
-                    class:cell-extended=move || cell.mark.get() == Mark::Extended
-                    class:cell-key=move || cell.mark.get() == Mark::Key>
-                    {move || has_arrow().then(|| view! { <span class="cell-arrow" aria-hidden="true">"➜"</span> })}
-                    <textarea rows="3" id=cell_id placeholder=placeholder aria-label=move || { let title = title_signal.get(); let title = title.trim(); if title.is_empty() { format!("{}, {} argument {}", SPEECH_COLS[col].full, side.label(), row_index) } else { format!("{}, {} argument {}: {}", SPEECH_COLS[col].full, side.label(), row_index, title) } }
-                        prop:value=move || cell.text.get()
-                        on:input={let s = state.clone(); move |ev| { cell.text.set(event_target_value(&ev)); save(&s); }}
-                        on:focus=move |_| if let Some(ctx) = insert_ctx { ctx.focus(cell_target) }></textarea>
-                    <div class="cell-print" aria-hidden="true">{move || cell.text.get()}</div>
-                    <div class="cell-marks no-print">
-                        {[(Mark::Dropped, "💤 dropped"), (Mark::Extended, "➜ extended"), (Mark::Key, "⭐ key")].into_iter().map(|(mark, label)| {
-                            view! {
-                                <button class="mark-btn"
-                                    class:mark-on=move || cell.mark.get() == mark
-                                    aria-pressed=move || if cell.mark.get() == mark { "true" } else { "false" }
-                                    on:click={let s = state.clone(); move |_| {
-                                        cell.mark.update(|m| *m = if *m == mark { Mark::None } else { mark });
-                                        save(&s);
-                                    }}>{label}</button>
-                            }
-                        }).collect_view()}
-                    </div>
-                    {move || {
-                        let label = cell.mark.get().label();
-                        if label.is_empty() { None } else { Some(view! { <span class="mark-print">{label}</span> }) }
-                    }}
-                </div>
-            }
-        }).collect_view()}
     }
 }
