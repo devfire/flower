@@ -42,6 +42,24 @@ class ExtractTests(unittest.TestCase):
         self.assertEqual(topic["period"], "2026 November/December")
         self.assertTrue(topic["resolution"].startswith("Resolved: European members"))
 
+    def test_trailing_sentence_after_resolution_is_not_swallowed(self):
+        # Issue #36 repro: page copy after the resolution's first period.
+        html = (
+            '<h2>Public Forum Debate \u2013 2026 September/October Topic</h2>'
+            '<p>Resolved: The US should do X. Registration for the topic webinar opens Monday.</p>'
+            '<h2>Next</h2>'
+        )
+        topic = extract_pf_topic(html, date(2026, 9, 15))
+        self.assertEqual(topic["resolution"], "Resolved: The US should do X.")
+
+    def test_abbreviation_periods_stay_inside_the_resolution(self):
+        html = (
+            '<h2>Public Forum Debate \u2013 2026 September/October Topic</h2>'
+            '<p>Resolved: The U.S. should spend 3.5 million dollars. Registration opens Monday.</p>'
+        )
+        topic = extract_pf_topic(html, date(2026, 9, 15))
+        self.assertEqual(topic["resolution"], "Resolved: The U.S. should spend 3.5 million dollars.")
+
     def test_missing_pf_heading_is_an_error(self):
         with self.assertRaises(ValueError):
             extract_pf_topic("<h3>Policy Debate Topic</h3>", date(2026, 10, 19))

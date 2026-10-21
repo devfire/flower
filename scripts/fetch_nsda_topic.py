@@ -51,7 +51,10 @@ MONTHS = {
 }
 
 PF_HEADING = re.compile(r"^Public Forum Debate\s*[\u2013\u2014-]\s*(.+?)\s*Topic$")
-RESOLVED = re.compile(r"Resolved:\s*(.+?\.)(?:\s+A total of\s|\s*$)")
+# First sentence-ending period: a period followed by end-of-block or by
+# whitespace + a capital/digit/opener. Abbreviation and decimal periods
+# ("U.S. should", "3.5 million") fail that test, so they stay inside.
+RESOLVED = re.compile(r"Resolved:\s*(.+?\.)(?=\s+(?:[A-Z0-9\"'\u201c\u2018(\[])|\s*$)")
 
 
 class _HeadingTextParser(HTMLParser):
