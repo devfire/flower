@@ -39,6 +39,19 @@ pub fn ceil_secs(remaining_ms: f64) -> i32 {
     }
 }
 
+/// Display value a running tick should publish, or `None` when it is
+/// the value already on screen. Ticks fire 4×/second but the displayed
+/// second changes only 1×/second; returning `None` lets the caller skip
+/// the signal writes (and the per-tick persist) that would otherwise
+/// notify subscribers with an identical value. Callers handle expiry
+/// (`remaining_ms <= 0.0`) before calling this: expiry must run even
+/// when the display already reads 0.
+#[must_use]
+pub fn tick_secs(remaining_ms: f64, displayed: i32) -> Option<i32> {
+    let secs = ceil_secs(remaining_ms);
+    (secs != displayed).then_some(secs)
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum TimerKind {
     Speech,
@@ -195,6 +208,22 @@ mod tests {
         assert_eq!(ceil_secs(59_500.0), 60);
         assert_eq!(ceil_secs(f64::INFINITY), i32::MAX);
         assert_eq!(ceil_secs(f64::from(i32::MAX) * 1_000.0), i32::MAX);
+    }
+
+    #[test]
+    fn tick_secs_suppresses_ticks_within_the_displayed_second() {
+        // 250 ms ticks inside the same displayed second publish nothing.
+        assert_eq!(tick_secs(60_000.0, 60), None);
+        assert_eq!(tick_secs(59_750.0, 60), None);
+        assert_eq!(tick_secs(59_500.0, 60), None);
+        assert_eq!(tick_secs(59_250.0, 60), None);
+        // Crossing into the next second publishes exactly that second.
+        assert_eq!(tick_secs(59_000.0, 60), Some(59));
+        assert_eq!(tick_secs(58_999.0, 60), Some(59));
+        assert_eq!(tick_secs(1_000.0, 2), Some(1));
+        assert_eq!(tick_secs(1.0, 1), None);
+        // A stale display (pause/resume, clock jump) still republishes.
+        assert_eq!(tick_secs(59_500.0, 42), Some(60));
     }
 
     #[test]

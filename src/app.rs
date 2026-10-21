@@ -5,7 +5,7 @@ use crate::state::{
     RoundState, RowState, copy_text, load_initial, now_ms, print_page, save, save_progress,
     timer_expired_feedback, unlock_audio,
 };
-use crate::timer::{TimerBank, TimerKind, ceil_secs, fmt_time};
+use crate::timer::{TimerBank, TimerKind, ceil_secs, fmt_time, tick_secs};
 use crate::topic::{self, TopicAction};
 use gloo_timers::callback::Interval;
 use leptos::prelude::*;
@@ -250,12 +250,15 @@ pub fn App() -> impl IntoView {
                         timer_label.get_untracked()
                     ));
                     timer_expired_feedback(audio_ctx.get_value().as_ref());
-                } else {
-                    let secs = ceil_secs(remaining_ms);
+                    persist_progress.run(());
+                } else if let Some(secs) = tick_secs(remaining_ms, timer_secs.get_untracked()) {
+                    // Most 250 ms ticks land in the displayed second:
+                    // skip the writes and persist entirely for those,
+                    // so subscribers are not notified with the same value.
                     timer_secs.set(secs);
                     timer_bank.update(|b| b.bank_displayed(secs));
+                    persist_progress.run(());
                 }
-                persist_progress.run(());
             })));
         }
     };
