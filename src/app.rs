@@ -2,7 +2,7 @@ use crate::model::*;
 use crate::progress::RoundProgress;
 use crate::shorthand::{InsertCtx, TextTarget, insert_shorthand};
 use crate::state::*;
-use crate::timer::{PREP_SECS, TimerBank, TimerKind, fmt_time};
+use crate::timer::{TimerBank, TimerKind, fmt_time};
 use crate::topic::{self, TopicAction};
 use gloo_timers::callback::Interval;
 use leptos::prelude::*;
@@ -268,11 +268,17 @@ pub fn App() -> impl IntoView {
     // per-team action. Resetting the on-screen prep stops its countdown;
     // resetting the other team's prep disturbs nothing else.
     let reset_prep = move |side: Side| {
-        if timer_bank.get_untracked().active() == TimerKind::Prep(side) {
+        let on_screen = timer_bank.get_untracked().active() == TimerKind::Prep(side);
+        if on_screen {
             stop_timer();
-            timer_secs.set(PREP_SECS);
         }
-        timer_bank.update(|b| b.reset_prep(side));
+        let mut shown = timer_secs.get_untracked();
+        timer_bank.update(|b| {
+            shown = b.reset_prep(side, shown);
+        });
+        if on_screen {
+            timer_secs.set(shown);
+        }
         persist_progress.run(());
     };
     // Shared Reset: in prep it only returns to the (preserved) speech

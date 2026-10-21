@@ -119,12 +119,20 @@ impl TimerBank {
 
     /// Restore one team's prep balance to the full 3:00 — the only way a
     /// prep balance ever goes back up. Returns the value the display
-    /// should show if that team's prep is currently on screen, else the
-    /// untouched active timer's banked value via `secs_for`.
-    pub fn reset_prep(&mut self, side: Side) {
+    /// should show, given the live display value `displayed`: `PREP_SECS`
+    /// if that team's prep is currently on screen, else the untouched
+    /// active timer's value via `secs_for`. Callers displaying a timer
+    /// must use the returned value.
+    #[must_use]
+    pub fn reset_prep(&mut self, side: Side, displayed: i32) -> i32 {
         match side {
             Side::Pro => self.pro_prep_secs = PREP_SECS,
             Side::Con => self.con_prep_secs = PREP_SECS,
+        }
+        if self.active == TimerKind::Prep(side) {
+            PREP_SECS
+        } else {
+            self.secs_for(self.active, displayed)
         }
     }
 
@@ -196,11 +204,22 @@ mod tests {
         bank.bank_displayed(100);
         bank.switch_to(TimerKind::Prep(Side::Con));
         bank.bank_displayed(50);
-        bank.reset_prep(Side::Pro);
+        // Con prep is on screen at 50: resetting Pro leaves the display alone.
+        assert_eq!(bank.reset_prep(Side::Pro, 50), 50);
         assert_eq!(bank.prep_secs(Side::Pro), PREP_SECS);
         assert_eq!(bank.prep_secs(Side::Con), 50, "Con balance must not move");
         // Merely re-entering a used prep timer never tops it up.
         assert_eq!(bank.switch_to(TimerKind::Prep(Side::Con)), 50);
+    }
+
+    #[test]
+    fn resetting_on_screen_prep_returns_full_prep_for_display() {
+        let mut bank = TimerBank::new(240);
+        bank.switch_to(TimerKind::Prep(Side::Pro));
+        bank.bank_displayed(42);
+        // Pro prep is on screen at 42: caller must show the refill.
+        assert_eq!(bank.reset_prep(Side::Pro, 42), PREP_SECS);
+        assert_eq!(bank.prep_secs(Side::Pro), PREP_SECS);
     }
 
     #[test]
@@ -210,7 +229,8 @@ mod tests {
         bank.bank_displayed(0);
         bank.switch_to(TimerKind::Speech);
         assert_eq!(bank.switch_to(TimerKind::Prep(Side::Pro)), 0);
-        bank.reset_prep(Side::Pro);
+        // Pro prep is back on screen at 0: display must show the refill.
+        assert_eq!(bank.reset_prep(Side::Pro, 0), PREP_SECS);
         assert_eq!(bank.switch_to(TimerKind::Prep(Side::Pro)), PREP_SECS);
     }
 

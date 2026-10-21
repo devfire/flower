@@ -46,6 +46,9 @@ No server, database, or API keys: it's a fully static WASM site.
 | `src/state.rs` | Per-cell reactive signals, localStorage snapshot save/load |
 | `src/app.rs` | All UI: hero, guide + timers, flow sheets, ballot |
 | `src/topic.rs` | NSDA resolution: bundled fallback, same-origin `topics.json` fetch, pre-fill/offer decision |
+| `src/timer.rs` | Speech/prep timer bank (`TimerBank`, `PREP_SECS`, `fmt_time`) |
+| `src/progress.rs` | Round-progress persistence (guide step, timers, prep balances) |
+| `src/shorthand.rs` | Shorthand-chip insertion into flow cells / crossfire notes |
 | `topics.json` | Last bundled NSDA PF resolution (fallback; refreshed at deploy time) |
 | `scripts/fetch_nsda_topic.py` | Build-time NSDA topics-page extraction (+ offline tests in `scripts/test_fetch_nsda_topic.py`) |
 | `style.css` | Kawaii pastel theme, responsive + print styles |
