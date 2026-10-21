@@ -512,7 +512,8 @@ impl RoundData {
     /// view only has to feed it a tracked snapshot.
     ///
     /// Inferred drop: opponent's rebuttal is already over and *every*
-    /// opponent-speech box on the row is blank — an answer in
+    /// opponent-speech box in a completed-or-current speech on the row
+    /// is blank — an answer in
     /// Constructive, Summary, or Final Focus counts just as much as one
     /// in Rebuttal. Explicit drop: the judge marked a cell 💤; that is
     /// surfaced immediately, rebuttal gate and answer text notwithstanding,
@@ -526,6 +527,13 @@ impl RoundData {
         let completed: Vec<usize> = guide
             .iter()
             .take(guide_step.min(guide.len()))
+            .filter_map(|g| g.flow_col)
+            .collect();
+        // Speeches completed or happening now: text in one of these can
+        // be an answer, text typed ahead into a future speech cannot.
+        let eligible: Vec<usize> = guide
+            .iter()
+            .take(guide_step.saturating_add(1).min(guide.len()))
             .filter_map(|g| g.flow_col)
             .collect();
         let mut dropped = Vec::new();
@@ -563,11 +571,13 @@ impl RoundData {
                 }
                 // Any opponent box in a later speech counts, even in
                 // the speech happening now: text there means the answer
-                // was given. “Later” is speaking position, not canonical
-                // column — when Con speaks first, Pro's Constructive
-                // (canonical 0) answers Con's (canonical 1).
+                // was given. Text in a speech that has not happened yet
+                // does not count. “Later” is speaking position, not
+                // canonical column — when Con speaks first, Pro's
+                // Constructive (canonical 0) answers Con's (canonical 1).
                 let has_answer = row.cells.iter().enumerate().any(|(col, cell)| {
-                    order.position_of(col).is_some_and(|pos| pos > origin_pos)
+                    eligible.contains(&col)
+                        && order.position_of(col).is_some_and(|pos| pos > origin_pos)
                         && SPEECH_COLS.get(col).is_some_and(|s| s.side == answerer)
                         && !cell.text.trim().is_empty()
                 });
@@ -971,6 +981,27 @@ mod tests {
         // The owner's own later speeches are extensions, not answers:
         // a Pro row only extended in Pro Summary (4) is still dropped.
         assert_eq!(pro_round(Some(4)).dropped_arguments(10).len(), 1);
+    }
+
+    #[test]
+    fn future_speech_answers_do_not_suppress_dropped_hints() {
+        // At step 5 Con Rebuttal has ended, but Con Summary (5) and
+        // Con Final Focus (7) have not happened: text typed ahead
+        // there is not an answer yet.
+        for answer_col in [5, 7] {
+            assert_eq!(
+                pro_round(Some(answer_col)).dropped_arguments(5).len(),
+                1,
+                "future Pro answer in column {answer_col} suppressed a dropped hint at step 5"
+            );
+        }
+        // Same speech, once it is current, does count.
+        assert!(pro_round(Some(5)).dropped_arguments(7).is_empty());
+        assert!(pro_round(Some(7)).dropped_arguments(10).is_empty());
+        // Con side, symmetric: Pro Final Focus (6) is future at step 4
+        // and current at step 9.
+        assert_eq!(con_round(Some(6)).dropped_arguments(4).len(), 1);
+        assert!(con_round(Some(6)).dropped_arguments(9).is_empty());
     }
 
     #[test]
