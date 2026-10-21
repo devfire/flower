@@ -46,8 +46,13 @@ jobs:
       # Build-time NSDA extraction (issue #13): a browser fetch is
       # CORS-blocked, so curl the topics page here instead. On failure
       # the script keeps the committed topics.json and logs ::error::.
+      # Scheduled runs pass --strict so a fallback fails the job (red)
+      # instead of silently deploying a stale topic; push deploys keep
+      # the fallback and succeed.
       - name: Fetch current NSDA PF topic into topics.json
-        run: python3 scripts/fetch_nsda_topic.py --output topics.json
+        env:
+          FETCH_ARGS: ${{ github.event_name == 'schedule' && '--strict' || '' }}
+        run: python3 scripts/fetch_nsda_topic.py --output topics.json $FETCH_ARGS
 
       - name: Build (relative public URL works for project pages, user pages, and custom domains)
         run: trunk build --release --public-url ./

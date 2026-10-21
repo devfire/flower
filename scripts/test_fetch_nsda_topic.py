@@ -80,6 +80,22 @@ class ExtractTests(unittest.TestCase):
             self.assertIn("::error::", proc.stderr)
             self.assertIn("Bundled fallback", out.read_text())
 
+    def test_strict_fallback_fails_so_scheduled_run_goes_red(self):
+        script = Path(__file__).parent / "fetch_nsda_topic.py"
+        with tempfile.TemporaryDirectory() as tmp:
+            fallback = Path(tmp) / "topics.json"
+            fallback.write_text('{"resolution": "Resolved: Bundled fallback.", "period": "2026 September/October"}\n')
+            bad_html = Path(tmp) / "bad.html"
+            bad_html.write_text("<html>no topics here</html>")
+            out = Path(tmp) / "out.json"
+            proc = subprocess.run(
+                [sys.executable, str(script), "--html-file", str(bad_html), "--output", str(out),
+                 "--fallback", str(fallback), "--strict"],
+                capture_output=True, text=True, check=False,
+            )
+            self.assertNotEqual(proc.returncode, 0, proc.stderr)
+            self.assertIn("::error::", proc.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

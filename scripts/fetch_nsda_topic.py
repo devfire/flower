@@ -15,7 +15,9 @@ are in the future).
 
 On any fetch/parse failure we keep the last bundled ``topics.json``
 (the fallback) and say so loudly; we never write an empty file. With no
-valid fallback we exit non-zero.
+valid fallback we exit non-zero. With ``--strict`` (scheduled runs) a
+fallback also exits non-zero, so a permanently broken extractor turns the
+weekly run red instead of deploying a silently stale topic.
 
 Stdlib only. Testable offline:
     fetch_nsda_topic.py --html-file page.html --today 2026-10-19
@@ -140,6 +142,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--fallback", type=Path, default=None, help="last bundled file (default: --output)")
     ap.add_argument("--today", type=date.fromisoformat, default=date.today())
     ap.add_argument("--retrieved", default=None, help="retrieved date stamp (default: --today)")
+    ap.add_argument(
+        "--strict",
+        action="store_true",
+        help="exit non-zero on fallback instead of keeping the bundled topic (scheduled runs)",
+    )
     args = ap.parse_args(argv)
     fallback_path = args.fallback or args.output
     try:
@@ -157,6 +164,9 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         if fallback_path != args.output:
             args.output.write_text(json.dumps(fallback, indent=2) + "\n", encoding="utf-8")
+        if args.strict:
+            print(f"::error::NSDA topic extraction failed ({exc}) in strict mode; failing instead of keeping {fallback_path}", file=sys.stderr)
+            return 1
         print(f"::error::NSDA topic extraction failed ({exc}); keeping last bundled topic from {fallback_path}", file=sys.stderr)
         return 0
     payload = {
