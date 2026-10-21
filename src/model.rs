@@ -415,7 +415,8 @@ pub struct MarkedArgument {
     pub owner: Side,
     /// Row title if given, else the argument's own text.
     pub name: String,
-    /// Speech (`SPEECH_COLS` full name) of the first cell with the mark.
+    /// Speech (`SPEECH_COLS` full name) of the first cell with the mark
+    /// in the round's speaking order.
     pub speech: &'static str,
 }
 
@@ -597,7 +598,9 @@ impl RoundData {
     }
 
     /// Rows carrying `mark` (💤/➜/⭐), in flow order, for the decision
-    /// summary. `Mark::None` yields nothing — it is absence of a mark.
+    /// summary. The reported speech is the first marked cell in this
+    /// round's speaking order, not canonical column order.
+    /// `Mark::None` yields nothing — it is absence of a mark.
     #[must_use]
     pub fn marked_arguments(&self, mark: Mark) -> Vec<MarkedArgument> {
         if mark == Mark::None {
@@ -607,12 +610,12 @@ impl RoundData {
         for (rows, owner) in [(&self.pro_rows, Side::Pro), (&self.con_rows, Side::Con)] {
             let origin_col = SpeakingOrder::origin_col(owner);
             for row in rows {
-                if let Some(speech) = row
-                    .cells
-                    .iter()
-                    .enumerate()
-                    .find(|(_, c)| c.mark == mark)
-                    .and_then(|(col, _)| SPEECH_COLS.get(col))
+                if let Some(speech) = self
+                    .speaking_order
+                    .column_order()
+                    .into_iter()
+                    .find(|&col| row.cells.get(col).is_some_and(|c| c.mark == mark))
+                    .and_then(|col| SPEECH_COLS.get(col))
                     .map(|s| s.full)
                 {
                     marked.push(MarkedArgument {
@@ -1139,6 +1142,29 @@ mod tests {
             con_first_round(Some(1), None).dropped_arguments(10).len(),
             2
         );
+    }
+
+    #[test]
+    fn marked_arguments_first_mark_follows_speaking_order() {
+        // Both Constructives marked on one row: the speech spoken first
+        // in this round's order wins, not canonical column 0.
+        for (speaking_order, expected) in [
+            (SpeakingOrder::ProFirst, "Pro Constructive"),
+            (SpeakingOrder::ConFirst, "Con Constructive"),
+        ] {
+            let mut row = RowData::new(1, "C1: Oceans");
+            row.cells[0].mark = Mark::Key;
+            row.cells[1].mark = Mark::Key;
+            let round = RoundData {
+                speaking_order,
+                pro_rows: vec![row],
+                con_rows: Vec::new(),
+                ..RoundData::default()
+            };
+            let marked = round.marked_arguments(Mark::Key);
+            assert_eq!(marked.len(), 1, "{speaking_order:?}");
+            assert_eq!(marked[0].speech, expected, "{speaking_order:?}");
+        }
     }
 
     #[test]
