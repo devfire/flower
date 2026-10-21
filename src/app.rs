@@ -360,20 +360,25 @@ pub fn App() -> impl IntoView {
     // the dialog disposes its subtree, which would kill the new rows'
     // signals and panic every later save/read of them.
     let app_owner = Owner::current();
+    // Every round replacement (New round, example round) restarts the
+    // walk identically: `set_step(0)` stops the running timer (dropping
+    // its Interval and deadline, so a pending expiry cannot fire into
+    // the new round) and re-points label/sheet at the first speech, then
+    // both prep balances return to 3:00. Issue #17: the fresh
+    // walk/balances replace the saved progress, so a reload cannot
+    // resurrect the previous round's step or prep.
+    let reset_round_walk = Callback::new(move |()| {
+        set_step.run(0);
+        timer_bank.update(TimerBank::reset_all_prep);
+        persist_progress.run(());
+    });
     let start_new_round = Callback::new(move |()| {
         st_clear.replace(RoundData::default());
         // A brand-new round starts empty, so it gets the current NSDA
         // pre-fill like a fresh visit.
         st_clear.topic.set(nsda_topic.get_untracked().resolution);
         save(&st_clear);
-        set_step.run(0);
-        // A brand-new round is the other explicit prep reset: both
-        // teams start again at 3:00.
-        timer_bank.update(TimerBank::reset_all_prep);
-        // Issue #17: the fresh walk/balances replace the saved
-        // progress, so a reload cannot resurrect the previous round's
-        // step or prep.
-        persist_progress.run(());
+        reset_round_walk.run(());
     });
     // Runs whichever destructive action the dialog confirmed. Called
     // under the App owner (see `app_owner` above), never the dialog's.
@@ -382,6 +387,7 @@ pub fn App() -> impl IntoView {
         PendingConfirm::ExampleRound => {
             st_confirm.replace(RoundData::sample());
             save(&st_confirm);
+            reset_round_walk.run(());
         }
         PendingConfirm::ResetPrep(side) => reset_prep(side),
     });
@@ -407,6 +413,7 @@ pub fn App() -> impl IntoView {
                             if st_sample.snapshot().is_empty() {
                                 st_sample.replace(RoundData::sample());
                                 save(&st_sample);
+                                reset_round_walk.run(());
                             } else {
                                 pending_confirm.set(Some(PendingConfirm::ExampleRound));
                             }

@@ -128,7 +128,7 @@ impl TimerBank {
         }
     }
 
-    /// Restore both prep balances (new round only).
+    /// Restore both prep balances (round replacement only).
     pub fn reset_all_prep(&mut self) {
         self.pro_prep_secs = PREP_SECS;
         self.con_prep_secs = PREP_SECS;
