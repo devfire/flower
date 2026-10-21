@@ -277,6 +277,18 @@ impl SpeakingOrder {
         self.column_order().iter().position(|&c| c == col)
     }
 
+    /// 1-based CSS grid column presenting canonical column `col` in
+    /// this speaking order. Grid column 1 holds the argument title, so
+    /// speaking position 0 maps to grid column 2. Rendering every cell
+    /// once in canonical order and placing it with this column lets a
+    /// speaking-order flip re-sequence the existing DOM nodes via CSS
+    /// instead of remounting them (issue #26). Unknown columns keep
+    /// their canonical slot.
+    #[must_use]
+    pub fn grid_column(self, col: usize) -> usize {
+        self.position_of(col).unwrap_or(col) + 2
+    }
+
     /// Canonical column where `owner`'s case is first written: that
     /// side's Constructive, whichever speech of the round it is.
     #[must_use]
@@ -1115,6 +1127,32 @@ mod tests {
         assert!(guide[10].bubble.contains("Last speech"));
         assert_eq!(SpeakingOrder::default(), SpeakingOrder::ProFirst);
         assert_eq!(GUIDE[0].title, "Pro Constructive");
+    }
+
+    #[test]
+    fn grid_column_places_each_canonical_column_once_per_order() {
+        // Issue #26: cells render once in canonical order and are
+        // sequenced only by this CSS grid column, so it must be a
+        // permutation of 2..=9 (column 1 is the argument title) that
+        // agrees with column_order in both speaking orders.
+        for order in [SpeakingOrder::ProFirst, SpeakingOrder::ConFirst] {
+            let mut placed: Vec<usize> = (0..SPEECH_COLS.len())
+                .map(|col| order.grid_column(col))
+                .collect();
+            placed.sort_unstable();
+            assert_eq!(
+                placed,
+                (2..=SPEECH_COLS.len() + 1).collect::<Vec<_>>(),
+                "{order:?}"
+            );
+            for (pos, col) in order.column_order().iter().enumerate() {
+                assert_eq!(order.grid_column(*col), pos + 2, "{order:?} col {col}");
+            }
+            assert_eq!(order.grid_column(SPEECH_COLS.len()), SPEECH_COLS.len() + 2);
+        }
+        assert_eq!(SpeakingOrder::ProFirst.grid_column(0), 2);
+        assert_eq!(SpeakingOrder::ConFirst.grid_column(0), 3);
+        assert_eq!(SpeakingOrder::ConFirst.grid_column(1), 2);
     }
 
     #[test]

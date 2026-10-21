@@ -786,12 +786,17 @@ fn FlowSheet(
         <div class=sheet_class>
             <div class="flow-scroll">
                 <div class="flow-grid" style=format!("grid-template-columns: minmax(8rem, 11rem) repeat({}, minmax(6.5rem, 1fr));", SPEECH_COLS.len())>
-                    <div class="fh fh-corner">
+                    <div class="fh fh-corner" style="grid-column: 1; grid-row: 1;">
                         {format!("{} arguments ↓", side.label())}
                         <span class="fh-sub">"one row = one argument"</span>
                     </div>
-                    {move || speaking_order.get().column_order().into_iter().enumerate().map(|(pos, col)| {
+                    {(0..SPEECH_COLS.len()).map(|col| {
                         let sc = SPEECH_COLS[col];
+                        // Canonical render + CSS grid placement (issue #26):
+                        // a speaking-order flip only restyles these nodes,
+                        // never remounts the textareas below them.
+                        let grid_style = move || format!("grid-column: {}; grid-row: 1;", speaking_order.get().grid_column(col));
+                        let has_arrow = move || speaking_order.get().position_of(col).unwrap_or(col) > 0;
                         let is_now = move || current_col.is_some_and(|signal| signal.get() == Some(col));
                         let dim = move || {
                             focus_mode.get()
@@ -800,18 +805,18 @@ fn FlowSheet(
                         };
                         match on_speech_click {
                             Some(on_click) => view! {
-                                <button type="button" class="fh fh-click" class:fh-now=is_now class:fh-dim=dim
+                                <button type="button" class="fh fh-click" class:fh-now=is_now class:fh-dim=dim style=grid_style
                                     aria-current=move || is_now().then_some("step")
                                     title=format!("Go to {}", sc.full)
                                     on:click=move |_| on_click.run(col)>
-                                    {if pos > 0 { Some(view! { <span class="fh-arrow" aria-hidden="true">"➜"</span> }) } else { None }}
+                                    {move || has_arrow().then(|| view! { <span class="fh-arrow" aria-hidden="true">"➜"</span> })}
                                     {move || is_now().then(|| view! { <span class="fh-badge">"✏️ you are here"</span> })}
                                     <span class="fh-name">{sc.full}</span>
                                     <span class="fh-sub">{format!("{} min", sc.minutes)}</span>
                                 </button>
                             }.into_any(),
                             None => view! {
-                                <div class="fh" class:fh-now=is_now class:fh-dim=dim>
+                                <div class="fh" class:fh-now=is_now class:fh-dim=dim style=grid_style>
                                     {move || is_now().then(|| view! { <span class="fh-badge">"✏️ you are here"</span> })}
                                     <span class="fh-name">{sc.full}</span>
                                     <span class="fh-sub">{format!("{} min", sc.minutes)}</span>
@@ -864,7 +869,7 @@ fn FlowRow(
         }
     });
     view! {
-        <div class="fr-title">
+        <div class="fr-title" style=format!("grid-column: 1; grid-row: {};", row_index + 1)>
             <input type="text" id=title_id placeholder="Contention name…" aria-label=format!("{} argument {} title", side.label(), row_index)
                 on:focus=move |_| if let Some(ctx) = insert_ctx { ctx.focus(title_target) }
                 prop:value=move || row.title.get()
@@ -899,9 +904,11 @@ fn FlowRow(
                 })}}
             </div>
         </div>
-        {let r = row.clone(); move || speaking_order.get().column_order().into_iter().enumerate().map(|(pos, col)| {
+        {let r = row.clone(); (0..SPEECH_COLS.len()).map(|col| {
             let cell = r.cells[col];
             let row = r.clone();
+            let grid_style = move || format!("grid-column: {}; grid-row: {};", speaking_order.get().grid_column(col), row_index + 1);
+            let has_arrow = move || speaking_order.get().position_of(col).unwrap_or(col) > 0;
             let is_now = move || current_col.is_some_and(|signal| signal.get() == Some(col));
             let dim = move || {
                 focus_mode.get()
@@ -913,13 +920,11 @@ fn FlowRow(
             let cell_target = TextTarget::FlowCell { side, row_id, col };
             let cell_id = insert_ctx.map(|_| cell_target.id());
             view! {
-                <div class="cell" class:cell-now=is_now class:cell-dim=dim
+                <div class="cell" class:cell-now=is_now class:cell-dim=dim style=grid_style
                     class:cell-dropped=move || cell.mark.get() == Mark::Dropped
                     class:cell-extended=move || cell.mark.get() == Mark::Extended
                     class:cell-key=move || cell.mark.get() == Mark::Key>
-                    {if pos > 0 {
-                        Some(view! { <span class="cell-arrow" aria-hidden="true">"➜"</span> })
-                    } else { None }}
+                    {move || has_arrow().then(|| view! { <span class="cell-arrow" aria-hidden="true">"➜"</span> })}
                     <textarea rows="3" id=cell_id placeholder=placeholder aria-label=move || { let title = title_signal.get(); let title = title.trim(); if title.is_empty() { format!("{}, {} argument {}", SPEECH_COLS[col].full, side.label(), row_index) } else { format!("{}, {} argument {}: {}", SPEECH_COLS[col].full, side.label(), row_index, title) } }
                         prop:value=move || cell.text.get()
                         on:input={let s = state.clone(); move |ev| { cell.text.set(event_target_value(&ev)); save(&s); }}
