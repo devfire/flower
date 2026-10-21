@@ -132,11 +132,13 @@ pub fn sheet_for(step: &GuideStep) -> Option<Side> {
     }
 }
 
+/// Flowed steps take title, side and minutes from `SPEECH_COLS` so the
+/// timer, sheet headers and guide cannot disagree (issue #35).
 pub const GUIDE: [GuideStep; 11] = [
     GuideStep {
-        title: "Pro Constructive",
-        side: Some(Side::Pro),
-        minutes: 4,
+        title: SPEECH_COLS[0].full,
+        side: Some(SPEECH_COLS[0].side),
+        minutes: SPEECH_COLS[0].minutes,
         flow_col: Some(0),
         bubble: "First speech! Just catch the big ideas — nobody flows every word. ♡",
         listen_for: "“Our first contention is…” — each contention is a new row on the Pro sheet.",
@@ -144,9 +146,9 @@ pub const GUIDE: [GuideStep; 11] = [
         watch_out: "Don't write full sentences. Tone + signposting tell you what matters most.",
     },
     GuideStep {
-        title: "Con Constructive",
-        side: Some(Side::Con),
-        minutes: 4,
+        title: SPEECH_COLS[1].full,
+        side: Some(SPEECH_COLS[1].side),
+        minutes: SPEECH_COLS[1].minutes,
         flow_col: Some(1),
         bubble: "Flip to the Con sheet — their case gets its own page, just like paper!",
         listen_for: "Con's own contentions. They may also start answering Pro — but their case comes first.",
@@ -164,9 +166,9 @@ pub const GUIDE: [GuideStep; 11] = [
         watch_out: "Don't decide anything yet — crossfire alone doesn't win rounds, the flow does.",
     },
     GuideStep {
-        title: "Pro Rebuttal",
-        side: Some(Side::Pro),
-        minutes: 4,
+        title: SPEECH_COLS[2].full,
+        side: Some(SPEECH_COLS[2].side),
+        minutes: SPEECH_COLS[2].minutes,
         flow_col: Some(2),
         bubble: "Now they answer each other! Write answers in the box directly RIGHT of the argument. ➜",
         listen_for: "“They say…, but…” — Pro is now answering the Con case.",
@@ -174,9 +176,9 @@ pub const GUIDE: [GuideStep; 11] = [
         watch_out: "A Con row with a blank Pro Reb box = that argument went unanswered. Leave it blank on purpose!",
     },
     GuideStep {
-        title: "Con Rebuttal",
-        side: Some(Side::Con),
-        minutes: 4,
+        title: SPEECH_COLS[3].full,
+        side: Some(SPEECH_COLS[3].side),
+        minutes: SPEECH_COLS[3].minutes,
         flow_col: Some(3),
         bubble: "Same thing, other direction — Con answers Pro on the Pro sheet. You’ve got this!",
         listen_for: "Con answering each Pro contention, and defending their own case.",
@@ -194,9 +196,9 @@ pub const GUIDE: [GuideStep; 11] = [
         watch_out: "Speakers may sound confident about arguments that aren't on the flow. Trust your paper.",
     },
     GuideStep {
-        title: "Pro Summary",
-        side: Some(Side::Pro),
-        minutes: 3,
+        title: SPEECH_COLS[4].full,
+        side: Some(SPEECH_COLS[4].side),
+        minutes: SPEECH_COLS[4].minutes,
         flow_col: Some(4),
         bubble: "Summaries = “extend” time. If they carry an argument forward, draw your arrow ➜!",
         listen_for: "“Extend our…” and picking their best 1–2 arguments to focus on.",
@@ -204,9 +206,9 @@ pub const GUIDE: [GuideStep; 11] = [
         watch_out: "Arguments NOT mentioned here are usually gone for good — Pro can't revive them later.",
     },
     GuideStep {
-        title: "Con Summary",
-        side: Some(Side::Con),
-        minutes: 3,
+        title: SPEECH_COLS[5].full,
+        side: Some(SPEECH_COLS[5].side),
+        minutes: SPEECH_COLS[5].minutes,
         flow_col: Some(5),
         bubble: "Con does the same — which of their arguments survive?",
         listen_for: "“Extend…” plus answers to Pro's summary choices.",
@@ -224,9 +226,9 @@ pub const GUIDE: [GuideStep; 11] = [
         watch_out: "Grand crossfire claims still need to exist on the flow to count.",
     },
     GuideStep {
-        title: "Pro Final Focus",
-        side: Some(Side::Pro),
-        minutes: 2,
+        title: SPEECH_COLS[6].full,
+        side: Some(SPEECH_COLS[6].side),
+        minutes: SPEECH_COLS[6].minutes,
         flow_col: Some(6),
         bubble: "Final Focus = “judge, vote for us because…”. Listen for weighing! ⚖️",
         listen_for: "Weighing words: bigger, sooner, more likely, “even if they win…”.",
@@ -234,9 +236,9 @@ pub const GUIDE: [GuideStep; 11] = [
         watch_out: "No brand-new arguments should appear here — if it's not on the flow already, be skeptical.",
     },
     GuideStep {
-        title: "Con Final Focus",
-        side: Some(Side::Con),
-        minutes: 2,
+        title: SPEECH_COLS[7].full,
+        side: Some(SPEECH_COLS[7].side),
+        minutes: SPEECH_COLS[7].minutes,
         flow_col: Some(7),
         bubble: "Last speech! After this, the ballot below walks you through deciding.",
         listen_for: "Con's #1 reason + their weighing against Pro's #1 reason.",
@@ -316,32 +318,64 @@ impl SpeakingOrder {
     /// wording such as “first speech” / “last speech”) changes.
     #[must_use]
     pub fn guide(self) -> [GuideStep; GUIDE.len()] {
-        match self {
-            Self::ProFirst => GUIDE,
-            Self::ConFirst => {
-                let mut guide = [
-                    GUIDE[1], GUIDE[0], GUIDE[2], GUIDE[4], GUIDE[3], GUIDE[5], GUIDE[7], GUIDE[6],
-                    GUIDE[8], GUIDE[10], GUIDE[9],
-                ];
-                guide[0].bubble =
-                    "First speech! Just catch the big ideas — nobody flows every word. ♡";
-                guide[0].listen_for =
-                    "“Our first contention is…” — each contention is a new row on the Con sheet.";
-                guide[0].do_it = "Start one row per contention. Write 3–6 words: the claim + why it matters (the “impact”).";
-                guide[1].bubble =
-                    "Flip to the Pro sheet — their case gets its own page, just like paper!";
-                guide[3].bubble = "Now they answer each other! Write answers in the box directly RIGHT of the argument. ➜";
-                guide[4].bubble = "Same thing, other direction — Pro answers Con on the Con sheet. You’ve got this!";
-                guide[6].bubble = "Summaries = “extend” time. If they carry an argument forward, draw your arrow ➜!";
-                guide[7].bubble = "Pro does the same — which of their arguments survive?";
-                guide[9].bubble =
-                    "Final Focus = “judge, vote for us because…”. Listen for weighing! ⚖️";
-                guide[9].listen_for = "Con's #1 reason + weighing words: bigger, sooner, more likely, “even if they win…”";
-                guide[10].bubble =
-                    "Last speech! After this, the ballot below walks you through deciding.";
-                guide
-            }
+        if self == Self::ProFirst {
+            return GUIDE;
         }
+        // Flowed steps take speeches in `column_order`, so pairs swap exactly
+        // as the columns do; crossfires keep their slots.
+        let order = self.column_order();
+        let mut next = 0;
+        let mut guide = GUIDE.map(|step| {
+            if step.flow_col.is_none() {
+                return step;
+            }
+            let col = order[next];
+            next += 1;
+            GUIDE
+                .iter()
+                .copied()
+                .find(|s| s.flow_col == Some(col))
+                .unwrap_or(step)
+        });
+        // Order-sensitive wording is keyed by speech, not by walk position.
+        edit_speech(&mut guide, 1, |s| {
+            s.bubble = "First speech! Just catch the big ideas — nobody flows every word. ♡";
+            s.listen_for =
+                "“Our first contention is…” — each contention is a new row on the Con sheet.";
+            s.do_it = "Start one row per contention. Write 3–6 words: the claim + why it matters (the “impact”).";
+        });
+        edit_speech(&mut guide, 0, |s| {
+            s.bubble = "Flip to the Pro sheet — their case gets its own page, just like paper!";
+        });
+        edit_speech(&mut guide, 3, |s| {
+            s.bubble = "Now they answer each other! Write answers in the box directly RIGHT of the argument. ➜";
+        });
+        edit_speech(&mut guide, 2, |s| {
+            s.bubble =
+                "Same thing, other direction — Pro answers Con on the Con sheet. You’ve got this!";
+        });
+        edit_speech(&mut guide, 5, |s| {
+            s.bubble =
+                "Summaries = “extend” time. If they carry an argument forward, draw your arrow ➜!";
+        });
+        edit_speech(&mut guide, 4, |s| {
+            s.bubble = "Pro does the same — which of their arguments survive?";
+        });
+        edit_speech(&mut guide, 7, |s| {
+            s.bubble = "Final Focus = “judge, vote for us because…”. Listen for weighing! ⚖️";
+            s.listen_for = "Con's #1 reason + weighing words: bigger, sooner, more likely, “even if they win…”";
+        });
+        edit_speech(&mut guide, 6, |s| {
+            s.bubble = "Last speech! After this, the ballot below walks you through deciding.";
+        });
+        guide
+    }
+}
+
+/// Applies `edit` to the walk's step for canonical speech column `col`.
+fn edit_speech(guide: &mut [GuideStep], col: usize, edit: impl FnOnce(&mut GuideStep)) {
+    if let Some(step) = guide.iter_mut().find(|s| s.flow_col == Some(col)) {
+        edit(step);
     }
 }
 
@@ -1247,6 +1281,24 @@ mod tests {
         assert!(guide[10].bubble.contains("Last speech"));
         assert_eq!(SpeakingOrder::default(), SpeakingOrder::ProFirst);
         assert_eq!(GUIDE[0].title, "Pro Constructive");
+    }
+
+    #[test]
+    fn guide_flowed_steps_share_speech_metadata_and_pair_swap_in_con_first() {
+        // Issue #35: timer, headers and guide read one source of truth.
+        for step in GUIDE {
+            if let Some(col) = step.flow_col {
+                assert_eq!(step.title, SPEECH_COLS[col].full);
+                assert_eq!(step.side, Some(SPEECH_COLS[col].side));
+                assert_eq!(step.minutes, SPEECH_COLS[col].minutes);
+            }
+        }
+        for order in [SpeakingOrder::ProFirst, SpeakingOrder::ConFirst] {
+            let walk = order.guide();
+            let flowed: Vec<usize> = walk.iter().filter_map(|g| g.flow_col).collect();
+            assert_eq!(flowed, order.column_order(), "{order:?}");
+            assert_eq!(walk.iter().filter(|g| g.flow_col.is_none()).count(), 3);
+        }
     }
 
     #[test]
