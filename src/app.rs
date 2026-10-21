@@ -19,6 +19,59 @@ fn placeholder_for(sheet: Side, col: usize) -> &'static str {
     }
 }
 
+/// Destructive actions that ask in the shared in-UI dialog before
+/// running, instead of the native `window.confirm` (which appears
+/// wherever the browser puts it and matches nothing else on the page).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PendingConfirm {
+    NewRound,
+    ExampleRound,
+    ResetPrep(Side),
+}
+
+impl PendingConfirm {
+    fn title(self) -> &'static str {
+        match self {
+            Self::NewRound => "Start a brand-new round?",
+            Self::ExampleRound => "Load the example round?",
+            Self::ResetPrep(Side::Pro) => "Reset Pro prep?",
+            Self::ResetPrep(Side::Con) => "Reset Con prep?",
+        }
+    }
+
+    fn body(self) -> &'static str {
+        match self {
+            Self::NewRound => {
+                "This clears the current flow and resets both prep timers. It can't be undone."
+            }
+            Self::ExampleRound => "This replaces the current flow. It can't be undone.",
+            Self::ResetPrep(Side::Pro) => {
+                "This resets only Pro prep back to 3:00. Con prep is untouched."
+            }
+            Self::ResetPrep(Side::Con) => {
+                "This resets only Con prep back to 3:00. Pro prep is untouched."
+            }
+        }
+    }
+
+    fn keep_label(self) -> &'static str {
+        match self {
+            Self::NewRound => "Keep current round",
+            Self::ExampleRound => "Keep current flow",
+            Self::ResetPrep(_) => "Keep prep time",
+        }
+    }
+
+    fn confirm_label(self) -> &'static str {
+        match self {
+            Self::NewRound => "Start new round",
+            Self::ExampleRound => "Load example round",
+            Self::ResetPrep(Side::Pro) => "Reset Pro prep",
+            Self::ResetPrep(Side::Con) => "Reset Con prep",
+        }
+    }
+}
+
 #[component]
 pub fn App() -> impl IntoView {
     // Issue #13: pre-fill an empty topic field with the bundled NSDA
@@ -258,6 +311,7 @@ pub fn App() -> impl IntoView {
     let st_notice = state.clone();
     let st_saved = state.clone();
     let st_sample = state.clone();
+    let st_confirm = state.clone();
     let st_clear = state.clone();
     let st_export = state.clone();
     let st_topic = state.clone();
@@ -286,15 +340,16 @@ pub fn App() -> impl IntoView {
     // changes update only the `cell-now`/`fh-now` class bindings in the
     // already-mounted sheets instead of rebuilding every row/textarea.
     let current_col = Signal::derive(move || guide.get()[step.get()].flow_col);
-    // In-UI confirmation for "New round": the native `window.confirm`
-    // dialog appears wherever the browser puts it and matches nothing
-    // else on the page. The safe action takes focus, like row delete.
-    let confirming_new_round = RwSignal::new(false);
-    let keep_round_button = NodeRef::<leptos::html::Button>::new();
+    // One shared in-UI confirmation dialog for every destructive
+    // action (`PendingConfirm`). The safe action takes focus, like
+    // row delete.
+    let pending_confirm = RwSignal::new(None::<PendingConfirm>);
+    let keep_confirm_button = NodeRef::<leptos::html::Button>::new();
     Effect::new(move |_| {
-        let keep = confirming_new_round
+        let keep = pending_confirm
             .get()
-            .then(|| keep_round_button.get())
+            .is_some()
+            .then(|| keep_confirm_button.get())
             .flatten();
         if let Some(button) = keep {
             let _ = button.focus();
@@ -320,6 +375,16 @@ pub fn App() -> impl IntoView {
         // step or prep.
         persist_progress.run(());
     });
+    // Runs whichever destructive action the dialog confirmed. Called
+    // under the App owner (see `app_owner` above), never the dialog's.
+    let confirm_action = Callback::new(move |pending: PendingConfirm| match pending {
+        PendingConfirm::NewRound => start_new_round.run(()),
+        PendingConfirm::ExampleRound => {
+            st_confirm.replace(RoundData::sample());
+            save(&st_confirm);
+        }
+        PendingConfirm::ResetPrep(side) => reset_prep(side),
+    });
 
     view! {
         <div class="page">
@@ -333,45 +398,48 @@ pub fn App() -> impl IntoView {
                     </p>
                 </div>
                 <div class="hero-actions no-print">
-                    <button class="btn btn-soft" on:click=move |_| {
-                        if st_sample.snapshot().is_empty()
-                            || confirm("Load the example round? This replaces the current flow.")
-                        {
-                            st_sample.replace(RoundData::sample());
-                            save(&st_sample);
-                        }
-                    }>
+                    <button class="btn btn-soft" aria-haspopup="dialog"
+                        aria-expanded=move || if pending_confirm.get() == Some(PendingConfirm::ExampleRound) { "true" } else { "false" }
+                        on:click=move |_| {
+                            // An empty flow has nothing to lose, so the
+                            // example loads straight away; only a flow
+                            // with content asks first.
+                            if st_sample.snapshot().is_empty() {
+                                st_sample.replace(RoundData::sample());
+                                save(&st_sample);
+                            } else {
+                                pending_confirm.set(Some(PendingConfirm::ExampleRound));
+                            }
+                        }>
                         "See an example round"
                     </button>
                     <button class="btn btn-soft" aria-haspopup="dialog"
-                        aria-expanded=move || if confirming_new_round.get() { "true" } else { "false" }
-                        on:click=move |_| confirming_new_round.set(true)>"New round"</button>
+                        aria-expanded=move || if pending_confirm.get() == Some(PendingConfirm::NewRound) { "true" } else { "false" }
+                        on:click=move |_| pending_confirm.set(Some(PendingConfirm::NewRound))>"New round"</button>
                     <button class="btn btn-soft" on:click=move |_| print_page()>"🖨️ Print / save PDF"</button>
                 </div>
             </header>
 
-            {move || confirming_new_round.get().then(|| { let app_owner = app_owner.clone(); view! {
-                <div class="confirm-overlay no-print" on:click=move |_| confirming_new_round.set(false)>
+            {move || pending_confirm.get().map(|pending| { let app_owner = app_owner.clone(); view! {
+                <div class="confirm-overlay no-print" on:click=move |_| pending_confirm.set(None)>
                     <div class="confirm-dialog" role="alertdialog" aria-modal="true"
-                        aria-labelledby="new-round-title" aria-describedby="new-round-desc"
+                        aria-labelledby="confirm-title" aria-describedby="confirm-desc"
                         on:click=move |ev| ev.stop_propagation()
                         on:keydown=move |ev| {
-                            if ev.key() == "Escape" { confirming_new_round.set(false); }
+                            if ev.key() == "Escape" { pending_confirm.set(None); }
                         }>
-                        <h2 id="new-round-title">"Start a brand-new round?"</h2>
-                        <p id="new-round-desc">
-                            "This clears the current flow and resets both prep timers. It can't be undone."
-                        </p>
+                        <h2 id="confirm-title">{pending.title()}</h2>
+                        <p id="confirm-desc">{pending.body()}</p>
                         <div class="confirm-actions">
-                            <button class="btn btn-soft" node_ref=keep_round_button
-                                on:click=move |_| confirming_new_round.set(false)>"Keep current round"</button>
+                            <button class="btn btn-soft" node_ref=keep_confirm_button
+                                on:click=move |_| pending_confirm.set(None)>{pending.keep_label()}</button>
                             <button class="btn btn-danger" on:click=move |_| {
+                                pending_confirm.set(None);
                                 match &app_owner {
-                                    Some(owner) => owner.with(|| start_new_round.run(())),
-                                    None => start_new_round.run(()),
+                                    Some(owner) => owner.with(|| confirm_action.run(pending)),
+                                    None => confirm_action.run(pending),
                                 }
-                                confirming_new_round.set(false);
-                            }>"Start new round"</button>
+                            }>{pending.confirm_label()}</button>
                         </div>
                     </div>
                 </div>
@@ -482,13 +550,15 @@ pub fn App() -> impl IntoView {
                             <button class="btn btn-chip btn-pro" on:click=move |_| start_prep(Side::Pro)>
                                 {move || format!("Pro · {}", fmt_time(timer_bank.get().secs_for(TimerKind::Prep(Side::Pro), timer_secs.get())))}
                             </button>
-                            <button class="btn btn-chip" title="Reset only Pro prep back to 3:00" aria-label="Reset only Pro prep back to 3:00"
-                                on:click=move |_| { if confirm("Reset only Pro prep back to 3:00?") { reset_prep(Side::Pro); } }>"↺ "</button>
+                            <button class="btn btn-chip" title="Reset only Pro prep back to 3:00" aria-label="Reset only Pro prep back to 3:00" aria-haspopup="dialog"
+                                aria-expanded=move || if pending_confirm.get() == Some(PendingConfirm::ResetPrep(Side::Pro)) { "true" } else { "false" }
+                                on:click=move |_| pending_confirm.set(Some(PendingConfirm::ResetPrep(Side::Pro)))>"↺ "</button>
                             <button class="btn btn-chip btn-con" on:click=move |_| start_prep(Side::Con)>
                                 {move || format!("Con · {}", fmt_time(timer_bank.get().secs_for(TimerKind::Prep(Side::Con), timer_secs.get())))}
                             </button>
-                            <button class="btn btn-chip" title="Reset only Con prep back to 3:00" aria-label="Reset only Con prep back to 3:00"
-                                on:click=move |_| { if confirm("Reset only Con prep back to 3:00?") { reset_prep(Side::Con); } }>"↺"</button>
+                            <button class="btn btn-chip" title="Reset only Con prep back to 3:00" aria-label="Reset only Con prep back to 3:00" aria-haspopup="dialog"
+                                aria-expanded=move || if pending_confirm.get() == Some(PendingConfirm::ResetPrep(Side::Con)) { "true" } else { "false" }
+                                on:click=move |_| pending_confirm.set(Some(PendingConfirm::ResetPrep(Side::Con)))>"↺"</button>
                         </div>
                         <div class="step-nav">
                             <button class="btn btn-soft" disabled={move || step.get() == 0}

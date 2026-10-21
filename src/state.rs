@@ -429,10 +429,6 @@ fn add_flush_listener(target: &web_sys::EventTarget, name: &str, closure: FlushL
     FLUSH_LISTENERS.with(|listeners| listeners.borrow_mut().push(closure));
 }
 
-pub fn confirm(message: &str) -> bool {
-    web_sys::window().is_some_and(|w| w.confirm_with_message(message).unwrap_or(false))
-}
-
 pub fn print_page() {
     if let Some(w) = web_sys::window() {
         let _ = w.print();

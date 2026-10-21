@@ -87,8 +87,9 @@ button, input, textarea { font: inherit; color: inherit; }
 .btn-danger:hover:not(:disabled) { background: #b3261e; color: #fff; }
 
 /* ---------- confirmation dialog ---------- */
-/* In-UI replacement for the native window.confirm on "New round":
-   centered card on a dimmed backdrop, in the page's own styling. */
+/* In-UI replacement for native window.confirm (new round, example
+   round, prep resets): centered card on a dimmed backdrop, in the
+   page's own styling. */
 .confirm-overlay {
   position: fixed; inset: 0; z-index: 50; padding: 20px;
   background: rgba(63, 79, 102, .45);
