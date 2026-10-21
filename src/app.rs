@@ -409,7 +409,7 @@ pub fn App() -> impl IntoView {
             <header class="hero">
                 <div class="hero-mascot" aria-hidden="true">""</div>
                 <div class="hero-text">
-                    <h1>"Flower" <span class="hero-sub">"easy flowing for PF judges"</span></h1>
+                    <h1>"Flow-er" <span class="hero-sub">"easy flowing for PF judges"</span></h1>
                     <p class="hero-tag">
                         "New to flowing? Perfect — you're exactly who this is for. "
                         "Follow the speech, follow the arrows ➜, and let Momo-chan's bubbles tell you what to write."
