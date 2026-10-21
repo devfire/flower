@@ -28,49 +28,59 @@ pub struct RowState {
 
 impl RowState {
     fn from_data(data: &RowData) -> Self {
+        // Exhaustive destructure: a new `RowData` field is a compile
+        // error here until it is wired into a signal.
+        let RowData { id, title, cells } = data;
         Self {
-            id: data.id,
-            title: RwSignal::new(data.title.clone()),
-            cells: data
-                .cells
+            id: *id,
+            title: RwSignal::new(title.clone()),
+            cells: cells
                 .iter()
-                .map(|c| CellState {
-                    text: RwSignal::new(c.text.clone()),
-                    mark: RwSignal::new(c.mark),
+                .map(|c| {
+                    let CellData { text, mark } = c;
+                    CellState {
+                        text: RwSignal::new(text.clone()),
+                        mark: RwSignal::new(*mark),
+                    }
                 })
                 .collect(),
         }
     }
-    fn to_data(&self) -> RowData {
+
+    /// The single row construction list. `tracked` selects `get()`
+    /// (subscribes the calling reactive scope, for derived views) over
+    /// `get_untracked()` (saving/export); there is no second twin list
+    /// to drift out of sync.
+    fn to_data(&self, tracked: bool) -> RowData {
         RowData {
             id: self.id,
-            title: self.title.get_untracked(),
+            title: read_signal(self.title, tracked),
             cells: self
                 .cells
                 .iter()
                 .map(|c| CellData {
-                    text: c.text.get_untracked(),
-                    mark: c.mark.get_untracked(),
+                    text: read_signal(c.text, tracked),
+                    mark: read_signal(c.mark, tracked),
                 })
                 .collect(),
         }
     }
-    /// Tracked twin of `to_data`: reading with `get()` subscribes the
-    /// calling reactive scope, so derived views re-run on every edit.
-    fn to_data_tracked(&self) -> RowData {
-        RowData {
-            id: self.id,
-            title: self.title.get(),
-            cells: self
-                .cells
-                .iter()
-                .map(|c| CellData {
-                    text: c.text.get(),
-                    mark: c.mark.get(),
-                })
-                .collect(),
-        }
+}
+
+/// Read `signal` tracked or untracked, per `tracked`.
+fn read_signal<T: Clone + Send + Sync + 'static>(signal: RwSignal<T>, tracked: bool) -> T {
+    if tracked {
+        signal.get()
+    } else {
+        signal.get_untracked()
     }
+}
+
+fn read_rows(rows: RwSignal<Vec<RowState>>, tracked: bool) -> Vec<RowData> {
+    read_signal(rows, tracked)
+        .iter()
+        .map(|row| row.to_data(tracked))
+        .collect()
 }
 
 #[derive(Clone)]
@@ -103,72 +113,61 @@ impl RoundState {
         // data. A pathological in-code round falls back to the blank
         // default rather than trapping the wasm app with duplicate ids.
         let data = data.try_normalised().unwrap_or_default();
+        // Exhaustive destructure: a new `RoundData` field is a compile
+        // error here until it gets a signal below.
+        let RoundData {
+            topic,
+            pro_team,
+            con_team,
+            speaking_order,
+            pro_rows,
+            con_rows,
+            crossfire_notes,
+            winner,
+            rfd,
+            next_id,
+        } = data;
         Self {
-            topic: RwSignal::new(data.topic),
-            pro_team: RwSignal::new(data.pro_team),
-            con_team: RwSignal::new(data.con_team),
-            speaking_order: RwSignal::new(data.speaking_order),
-            pro_rows: RwSignal::new(data.pro_rows.iter().map(RowState::from_data).collect()),
-            con_rows: RwSignal::new(data.con_rows.iter().map(RowState::from_data).collect()),
-            crossfire_notes: RwSignal::new(data.crossfire_notes),
-            winner: RwSignal::new(data.winner),
-            rfd: RwSignal::new(data.rfd),
-            next_id: RwSignal::new(data.next_id),
+            topic: RwSignal::new(topic),
+            pro_team: RwSignal::new(pro_team),
+            con_team: RwSignal::new(con_team),
+            speaking_order: RwSignal::new(speaking_order),
+            pro_rows: RwSignal::new(pro_rows.iter().map(RowState::from_data).collect()),
+            con_rows: RwSignal::new(con_rows.iter().map(RowState::from_data).collect()),
+            crossfire_notes: RwSignal::new(crossfire_notes),
+            winner: RwSignal::new(winner),
+            rfd: RwSignal::new(rfd),
+            next_id: RwSignal::new(next_id),
             save_failed: RwSignal::new(false),
             recovery_notice: RwSignal::new(None),
         }
     }
 
     pub fn snapshot(&self) -> RoundData {
-        RoundData {
-            topic: self.topic.get_untracked(),
-            pro_team: self.pro_team.get_untracked(),
-            con_team: self.con_team.get_untracked(),
-            speaking_order: self.speaking_order.get_untracked(),
-            pro_rows: self
-                .pro_rows
-                .get_untracked()
-                .iter()
-                .map(RowState::to_data)
-                .collect(),
-            con_rows: self
-                .con_rows
-                .get_untracked()
-                .iter()
-                .map(RowState::to_data)
-                .collect(),
-            crossfire_notes: self.crossfire_notes.get_untracked(),
-            winner: self.winner.get_untracked(),
-            rfd: self.rfd.get_untracked(),
-            next_id: self.next_id.get_untracked(),
-        }
+        self.snapshot_with_tracking(false)
     }
 
     /// Tracked twin of `snapshot`, for derived views (dropped-argument
     /// hints) that must update live as the judge types. Never use it for
     /// saving/export: it subscribes the caller to every cell in the round.
     pub fn snapshot_tracked(&self) -> RoundData {
+        self.snapshot_with_tracking(true)
+    }
+
+    /// The single `RoundData` construction list; `tracked` only selects
+    /// how each signal is read (see `RowState::to_data`).
+    fn snapshot_with_tracking(&self, tracked: bool) -> RoundData {
         RoundData {
-            topic: self.topic.get(),
-            pro_team: self.pro_team.get(),
-            con_team: self.con_team.get(),
-            speaking_order: self.speaking_order.get(),
-            pro_rows: self
-                .pro_rows
-                .get()
-                .iter()
-                .map(RowState::to_data_tracked)
-                .collect(),
-            con_rows: self
-                .con_rows
-                .get()
-                .iter()
-                .map(RowState::to_data_tracked)
-                .collect(),
-            crossfire_notes: self.crossfire_notes.get(),
-            winner: self.winner.get(),
-            rfd: self.rfd.get(),
-            next_id: self.next_id.get(),
+            topic: read_signal(self.topic, tracked),
+            pro_team: read_signal(self.pro_team, tracked),
+            con_team: read_signal(self.con_team, tracked),
+            speaking_order: read_signal(self.speaking_order, tracked),
+            pro_rows: read_rows(self.pro_rows, tracked),
+            con_rows: read_rows(self.con_rows, tracked),
+            crossfire_notes: read_signal(self.crossfire_notes, tracked),
+            winner: read_signal(self.winner, tracked),
+            rfd: read_signal(self.rfd, tracked),
+            next_id: read_signal(self.next_id, tracked),
         }
     }
 
@@ -184,18 +183,35 @@ impl RoundState {
         // discard the unreadable save, so it lifts the overwrite block.
         self.recovery_notice.set(None);
         let fresh = Self::from_data(data);
-        self.topic.set(fresh.topic.get_untracked());
-        self.pro_team.set(fresh.pro_team.get_untracked());
-        self.con_team.set(fresh.con_team.get_untracked());
-        self.speaking_order
-            .set(fresh.speaking_order.get_untracked());
-        self.pro_rows.set(fresh.pro_rows.get_untracked());
-        self.con_rows.set(fresh.con_rows.get_untracked());
-        self.crossfire_notes
-            .set(fresh.crossfire_notes.get_untracked());
-        self.winner.set(fresh.winner.get_untracked());
-        self.rfd.set(fresh.rfd.get_untracked());
-        self.next_id.set(fresh.next_id.get_untracked());
+        // Exhaustive destructure: a new `RoundState` field is a compile
+        // error here until it is copied (or deliberately not copied).
+        // `save_failed`/`recovery_notice` are session state, not round
+        // data: a fresh round must not clear a save-failure warning, and
+        // `recovery_notice` was already cleared above.
+        let Self {
+            topic,
+            pro_team,
+            con_team,
+            speaking_order,
+            pro_rows,
+            con_rows,
+            crossfire_notes,
+            winner,
+            rfd,
+            next_id,
+            save_failed: _,
+            recovery_notice: _,
+        } = fresh;
+        self.topic.set(topic.get_untracked());
+        self.pro_team.set(pro_team.get_untracked());
+        self.con_team.set(con_team.get_untracked());
+        self.speaking_order.set(speaking_order.get_untracked());
+        self.pro_rows.set(pro_rows.get_untracked());
+        self.con_rows.set(con_rows.get_untracked());
+        self.crossfire_notes.set(crossfire_notes.get_untracked());
+        self.winner.set(winner.get_untracked());
+        self.rfd.set(rfd.get_untracked());
+        self.next_id.set(next_id.get_untracked());
     }
 
     pub fn add_row(&self, side: Side) {
@@ -570,5 +586,84 @@ pub fn timer_expired_feedback(audio: Option<&web_sys::AudioContext>) {
         let _ = gain.connect_with_audio_node(&ctx.destination());
         let _ = osc.start_with_when(t);
         let _ = osc.stop_with_when(t + 0.2);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::Mark;
+
+    fn distinctive_round() -> RoundData {
+        let mut data = RoundData {
+            topic: "Resolved: distinctive".to_owned(),
+            pro_team: "Pro team".to_owned(),
+            con_team: "Con team".to_owned(),
+            speaking_order: SpeakingOrder::ConFirst,
+            pro_rows: vec![RowData::new(10, "Pro contention"), RowData::new(11, "")],
+            con_rows: vec![RowData::new(20, "Con contention")],
+            crossfire_notes: "crossfire note".to_owned(),
+            winner: Some(Side::Con),
+            rfd: "Con wins on weighing".to_owned(),
+            next_id: 99,
+        };
+        data.pro_rows[0].cells[0].text = "pro cell".to_owned();
+        data.pro_rows[0].cells[0].mark = Mark::Dropped;
+        data.con_rows[0].cells[1].text = "con cell".to_owned();
+        data.con_rows[0].cells[1].mark = Mark::Key;
+        data
+    }
+
+    /// Field-by-field equality (`RoundData` has no `PartialEq`): every
+    /// field is named, so a snapshot/replace that drops one fails here.
+    fn assert_round_eq(actual: &RoundData, expected: &RoundData) {
+        assert_eq!(actual.topic, expected.topic);
+        assert_eq!(actual.pro_team, expected.pro_team);
+        assert_eq!(actual.con_team, expected.con_team);
+        assert_eq!(actual.speaking_order, expected.speaking_order);
+        assert_eq!(actual.crossfire_notes, expected.crossfire_notes);
+        assert_eq!(actual.winner, expected.winner);
+        assert_eq!(actual.rfd, expected.rfd);
+        assert_eq!(actual.next_id, expected.next_id);
+        for (actual_rows, expected_rows) in [
+            (&actual.pro_rows, &expected.pro_rows),
+            (&actual.con_rows, &expected.con_rows),
+        ] {
+            assert_eq!(actual_rows.len(), expected_rows.len());
+            for (actual_row, expected_row) in actual_rows.iter().zip(expected_rows) {
+                assert_eq!(actual_row.id, expected_row.id);
+                assert_eq!(actual_row.title, expected_row.title);
+                assert_eq!(actual_row.cells.len(), expected_row.cells.len());
+                for (actual_cell, expected_cell) in actual_row.cells.iter().zip(&expected_row.cells)
+                {
+                    assert_eq!(actual_cell.text, expected_cell.text);
+                    assert_eq!(actual_cell.mark, expected_cell.mark);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn snapshot_and_tracked_snapshot_cover_every_field() {
+        let data = distinctive_round();
+        let state = RoundState::from_data(data.clone());
+        assert_round_eq(&state.snapshot(), &data);
+        assert_round_eq(&state.snapshot_tracked(), &data);
+    }
+
+    #[test]
+    fn replace_copies_every_round_field_but_keeps_session_state() {
+        let state = RoundState::from_data(RoundData::default());
+        state.save_failed.set(true);
+        state
+            .recovery_notice
+            .set(Some("unreadable save".to_owned()));
+        let data = distinctive_round();
+        state.replace(data.clone());
+        assert_round_eq(&state.snapshot(), &data);
+        // Session state is not round data: replace clears the recovery
+        // block (explicit discard) but not a save-failure warning.
+        assert_eq!(state.recovery_notice.get_untracked(), None);
+        assert!(state.save_failed.get_untracked());
     }
 }
