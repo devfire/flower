@@ -52,8 +52,23 @@ jobs:
       - name: Build (relative public URL works for project pages, user pages, and custom domains)
         run: trunk build --release --public-url ./
 
+      # SPA fallback: no router exists, so unknown paths serve the app
+      # shell. Only this copy is rewritten to root-absolute asset URLs:
+      # the main build keeps `--public-url ./` for portability, but `./`
+      # resolves against the requested path, so a fallback served at
+      # /some/deep/path would 404 its own JS/wasm/CSS and show blank.
+      # Root-absolute assumes serving at the origin root, which holds
+      # for production via the custom domain below
+      # (flower.devfire.io); on a project subpath the fallback copy
+      # would not load, while index.html keeps working.
       - name: SPA fallback for Pages
-        run: cp dist/index.html dist/404.html
+        run: |
+          cp dist/index.html dist/404.html
+          sed -i 's#\./#/#g' dist/404.html
+          if grep -q '\./' dist/404.html; then
+            echo "::error::404.html still contains relative asset URLs" >&2
+            exit 1
+          fi
 
       # Custom domain (flower.devfire.io -> devfire.github.io CNAME in Route 53).
       # Without this in the artifact, deploys would drop the Pages custom domain.

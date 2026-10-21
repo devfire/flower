@@ -13,7 +13,12 @@ use wasm_bindgen_futures::JsFuture;
 
 /// Same-origin file emitted next to `dist/index.html` at deploy time and
 /// copied by Trunk for local builds (`index.html` copy-file link).
-const TOPICS_PATH: &str = "topics.json";
+/// Root-absolute, not relative: the SPA 404 fallback serves the app at
+/// unknown deep paths (e.g. `/some/deep/path`), where a relative fetch
+/// would resolve under that path and 404. The app is deployed at the
+/// origin root (custom domain), so `/` is its base; anywhere that does
+/// not hold, the fetch fails and callers keep the bundled topic.
+const TOPICS_PATH: &str = "/topics.json";
 const BUNDLED_JSON: &str = include_str!("../topics.json");
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
