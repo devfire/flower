@@ -118,6 +118,20 @@ pub struct GuideStep {
     pub watch_out: &'static str,
 }
 
+/// Sheet a guide step writes on. Rebuttals answer the opponent's case,
+/// so they are written on the opponent's sheet; every other speech
+/// writes on the speaker's sheet. `flow_col` is canonical, so 2/3 are
+/// Pro/Con Rebuttal in any speaking order. Crossfires write nowhere
+/// (both fields are `None`), so the caller leaves the sheet alone.
+#[must_use]
+pub fn sheet_for(step: &GuideStep) -> Option<Side> {
+    match step.flow_col {
+        Some(2) => Some(Side::Con),
+        Some(3) => Some(Side::Pro),
+        _ => step.side,
+    }
+}
+
 pub const GUIDE: [GuideStep; 11] = [
     GuideStep {
         title: "Pro Constructive",
@@ -1101,6 +1115,24 @@ mod tests {
         assert!(guide[10].bubble.contains("Last speech"));
         assert_eq!(SpeakingOrder::default(), SpeakingOrder::ProFirst);
         assert_eq!(GUIDE[0].title, "Pro Constructive");
+    }
+
+    #[test]
+    fn sheet_for_points_rebuttals_at_opponents_sheet_in_both_orders() {
+        // Issue #24: every speech-(re)entry path derives the visible
+        // sheet from this one mapping, so rebuttals must land on the
+        // opponent's sheet regardless of speaking order.
+        for order in [SpeakingOrder::ProFirst, SpeakingOrder::ConFirst] {
+            for step in order.guide() {
+                let expected = match step.title {
+                    "Pro Rebuttal" => Some(Side::Con),
+                    "Con Rebuttal" => Some(Side::Pro),
+                    "Crossfire" | "Grand Crossfire" => None,
+                    _ => step.side,
+                };
+                assert_eq!(sheet_for(&step), expected, "{order:?} {}", step.title);
+            }
+        }
     }
 
     #[test]

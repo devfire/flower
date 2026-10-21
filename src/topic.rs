@@ -113,11 +113,6 @@ pub fn decide(current: &str, auto_filled: &str, spawned: &str, candidate: &NsdaT
     } else {
         TopicAction::Offer
     }
-}   } else if current == spawned.trim() && (current.is_empty() || current == auto_filled.trim()) {
-        TopicAction::Prefill
-    } else {
-        TopicAction::Offer
-    }
 }
 
 /// Fetch the same-origin `topics.json` shipped beside the app. Returns

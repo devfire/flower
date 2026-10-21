@@ -199,15 +199,7 @@ pub fn App() -> impl IntoView {
         timer_secs.set(full);
         timer_label.set(guide_now[next].title.to_string());
         timer_announcement.set(String::new());
-        // Rebuttals answer the opponent's case, so they are written on the
-        // opponent's sheet; every other speech writes on the speaker's sheet.
-        // `flow_col` is canonical, so 2/3 are Pro/Con Rebuttal in any order.
-        let sheet = match guide_now[next].flow_col {
-            Some(2) => Some(Side::Con),
-            Some(3) => Some(Side::Pro),
-            _ => guide_now[next].side,
-        };
-        if let Some(side) = sheet {
+        if let Some(side) = sheet_for(&guide_now[next]) {
             tab.set(side);
         }
         persist_progress.run(());
@@ -303,11 +295,13 @@ pub fn App() -> impl IntoView {
             });
             timer_secs.set(full);
         }
-        timer_label.set(
-            guide.get_untracked()[step.get_untracked()]
-                .title
-                .to_string(),
-        );
+        let current = guide.get_untracked()[step.get_untracked()];
+        timer_label.set(current.title.to_string());
+        // (Re-)entering a speech must show its write-sheet: prep entry
+        // and manual tab switches can leave the other sheet visible.
+        if let Some(side) = sheet_for(&current) {
+            tab.set(side);
+        }
         timer_announcement.set(String::new());
         persist_progress.run(());
     };
@@ -330,12 +324,7 @@ pub fn App() -> impl IntoView {
         if !matches!(timer_bank.get_untracked().active(), TimerKind::Prep(_)) {
             let g = order.guide()[step.get_untracked()];
             timer_label.set(g.title.to_string());
-            let sheet = match g.flow_col {
-                Some(2) => Some(Side::Con),
-                Some(3) => Some(Side::Pro),
-                _ => g.side,
-            };
-            if let Some(side) = sheet {
+            if let Some(side) = sheet_for(&g) {
                 tab.set(side);
             }
         }
