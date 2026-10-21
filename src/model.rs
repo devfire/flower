@@ -383,6 +383,36 @@ impl RowData {
     }
 }
 
+/// Serde bridge for `RoundData::winner`: the pre-`Option<Side>` save
+/// format was a bare string, so keep writing that string (old builds
+/// can still read new saves) and accept it on load, mapping anything
+/// other than `Pro`/`Con` to no winner instead of failing the round.
+mod winner_serde {
+    use super::Side;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<Side>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = Option::<String>::deserialize(deserializer)?;
+        Ok(match raw.as_deref() {
+            Some("Pro") => Some(Side::Pro),
+            Some("Con") => Some(Side::Con),
+            _ => None,
+        })
+    }
+
+    // `serialize_with` contract: serde passes `&Option<Side>`.
+    #[allow(clippy::ref_option, clippy::trivially_copy_pass_by_ref)]
+    pub fn serialize<S>(winner: &Option<Side>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(winner.map_or("", Side::label))
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct RoundData {
@@ -395,7 +425,15 @@ pub struct RoundData {
     pub pro_rows: Vec<RowData>,
     pub con_rows: Vec<RowData>,
     pub crossfire_notes: String,
-    pub winner: String,
+    /// Ballot winner; `None` until the judge picks a side. Old saves
+    /// stored `""`/`"Pro"`/`"Con"` (any other string was a phantom
+    /// vote); `winner_serde` maps those onto this type on load and
+    /// keeps the same on-disk strings on save.
+    #[serde(
+        deserialize_with = "winner_serde::deserialize",
+        serialize_with = "winner_serde::serialize"
+    )]
+    pub winner: Option<Side>,
     pub rfd: String,
     pub next_id: u32,
 }
@@ -410,7 +448,7 @@ impl Default for RoundData {
             pro_rows: vec![RowData::new(1, ""), RowData::new(2, "")],
             con_rows: vec![RowData::new(3, ""), RowData::new(4, "")],
             crossfire_notes: String::new(),
-            winner: String::new(),
+            winner: None,
             rfd: String::new(),
             next_id: 5,
         }
@@ -544,7 +582,7 @@ impl RoundData {
             && blank(&self.pro_team)
             && blank(&self.con_team)
             && blank(&self.crossfire_notes)
-            && blank(&self.winner)
+            && self.winner.is_none()
             && blank(&self.rfd)
             && self.pro_rows.iter().all(row_blank)
             && self.con_rows.iter().all(row_blank)
@@ -677,11 +715,7 @@ impl RoundData {
     #[must_use]
     pub fn decision_text(&self) -> String {
         use std::fmt::Write as _;
-        let winner = if self.winner.is_empty() {
-            "—"
-        } else {
-            &self.winner
-        };
+        let winner = self.winner.map_or("—", Side::label);
         let mut text = format!(
             "Flower — PF decision\nTopic: {}\nPro: {} · Con: {}\nWinner: {}\nReason: {}",
             self.topic, self.pro_team, self.con_team, winner, self.rfd
@@ -843,7 +877,7 @@ mod tests {
         let mut sample = RoundData::sample();
         sample.rfd = "Pro wins on weighing".to_owned();
         sample.crossfire_notes = "Con conceded 9%".to_owned();
-        sample.winner = "Pro".to_owned();
+        sample.winner = Some(Side::Pro);
         let fields = [
             "topic",
             "pro_team",
@@ -993,6 +1027,46 @@ mod tests {
         assert!(RoundData::from_saved_json("{not json").is_err());
         assert!(RoundData::from_saved_json("{\"topic\":42}").is_err());
         assert!(RoundData::from_saved_json("[1,2,3]").is_err());
+        assert!(RoundData::from_saved_json("{\"winner\":42}").is_err());
+    }
+
+    #[test]
+    fn legacy_winner_strings_load_as_sides_and_unknown_ones_as_no_winner() {
+        for (raw, expected) in [
+            ("Pro", Some(Side::Pro)),
+            ("Con", Some(Side::Con)),
+            ("", None),
+            ("pro", None),
+            ("Banana", None),
+        ] {
+            let json = format!(r#"{{"winner":"{raw}"}}"#);
+            let Ok(loaded) = RoundData::from_saved_json(&json) else {
+                panic!("winner {raw:?} save must load");
+            };
+            assert_eq!(loaded.winner, expected, "winner {raw:?}");
+            // No winner means no phantom vote: the round is still empty
+            // and the decision summary shows the blank line.
+            assert_eq!(loaded.is_empty(), expected.is_none(), "winner {raw:?}");
+            let label = expected.map_or("—", Side::label);
+            assert!(
+                loaded.decision_text().contains(&format!("Winner: {label}")),
+                "winner {raw:?}"
+            );
+            // Re-saving keeps the legacy string form, normalised.
+            let saved = serde_json::to_string(&loaded).unwrap_or_default();
+            let normalised = expected.map_or("", Side::label);
+            assert!(
+                saved.contains(&format!(r#""winner":"{normalised}""#)),
+                "winner {raw:?} saved as {saved}"
+            );
+        }
+        // Absent and null winners are also no winner.
+        for json in ["{}", r#"{"winner":null}"#] {
+            let Ok(loaded) = RoundData::from_saved_json(json) else {
+                panic!("{json} must load");
+            };
+            assert_eq!(loaded.winner, None, "{json}");
+        }
     }
 
     // GUIDE steps: 3 = Pro Rebuttal, 4 = Con Rebuttal, 5 = crossfire

@@ -683,14 +683,14 @@ pub fn App() -> impl IntoView {
                 <DroppedHints state=state.clone() step=step />
                 <div class="winner-row no-print">
                     <span>"I vote for:"</span>
-                    <button class="btn winner-btn btn-pro" class:winner-on=move || state.winner.get() == "Pro" aria-pressed=move || if state.winner.get() == "Pro" { "true" } else { "false" }
-                        on:click={let s = state.clone(); move |_| { s.winner.set("Pro".to_string()); save(&s); }}>"Pro"</button>
-                    <button class="btn winner-btn btn-con" class:winner-on=move || state.winner.get() == "Con" aria-pressed=move || if state.winner.get() == "Con" { "true" } else { "false" }
-                        on:click={let s = state.clone(); move |_| { s.winner.set("Con".to_string()); save(&s); }}>"Con"</button>
+                    <button class="btn winner-btn btn-pro" class:winner-on=move || state.winner.get() == Some(Side::Pro) aria-pressed=move || if state.winner.get() == Some(Side::Pro) { "true" } else { "false" }
+                        on:click={let s = state.clone(); move |_| { s.winner.set(Some(Side::Pro)); save(&s); }}>"Pro"</button>
+                    <button class="btn winner-btn btn-con" class:winner-on=move || state.winner.get() == Some(Side::Con) aria-pressed=move || if state.winner.get() == Some(Side::Con) { "true" } else { "false" }
+                        on:click={let s = state.clone(); move |_| { s.winner.set(Some(Side::Con)); save(&s); }}>"Con"</button>
                 </div>
-                <p class="winner-print">{move || {
-                    let w = state.winner.get();
-                    if w.is_empty() { "Winner: __________".to_string() } else { format!("Winner: {w}") }
+                <p class="winner-print">{move || match state.winner.get() {
+                    None => "Winner: __________".to_string(),
+                    Some(w) => format!("Winner: {}", w.label()),
                 }}</p>
                 <label class="field">
                     <span>"Reason for decision (say it in plain words — debaters learn from this!) 🗣️"</span>

@@ -82,7 +82,7 @@ pub struct RoundState {
     pub pro_rows: RwSignal<Vec<RowState>>,
     pub con_rows: RwSignal<Vec<RowState>>,
     pub crossfire_notes: RwSignal<String>,
-    pub winner: RwSignal<String>,
+    pub winner: RwSignal<Option<Side>>,
     pub rfd: RwSignal<String>,
     pub next_id: RwSignal<u32>,
     /// True after the last `save` failed (storage full/blocked/unavailable),
