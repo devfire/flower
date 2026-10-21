@@ -5,8 +5,8 @@
 use std::cell::{Cell, RefCell};
 
 use crate::model::{
-    CellData, Mark, RoundData, RowData, STORAGE_BACKUP_KEY, STORAGE_KEY, STORAGE_REVISION_KEY,
-    Side, SpeakingOrder, next_revision, stored_revision,
+    CellData, DroppedArgument, Mark, RoundData, RowData, STORAGE_BACKUP_KEY, STORAGE_KEY,
+    STORAGE_REVISION_KEY, Side, SpeakingOrder, next_revision, stored_revision,
 };
 use crate::progress::{PROGRESS_STORAGE_KEY, RoundProgress};
 use gloo_timers::callback::Timeout;
@@ -147,11 +147,27 @@ impl RoundState {
         self.snapshot_with_tracking(false)
     }
 
-    /// Tracked twin of `snapshot`, for derived views (dropped-argument
-    /// hints) that must update live as the judge types. Never use it for
-    /// saving/export: it subscribes the caller to every cell in the round.
-    pub fn snapshot_tracked(&self) -> RoundData {
-        self.snapshot_with_tracking(true)
+    /// Tracked dropped-argument derivation for the ballot hints: reads
+    /// (subscribes the caller to) only the inputs `dropped_arguments`
+    /// actually uses — speaking order and the row titles/cells — so
+    /// typing in the topic, team, crossfire, winner, or RFD fields never
+    /// re-derives hints. The other `RoundData` fields are inert defaults
+    /// the derivation never reads; every field is named so a new field
+    /// forces a decision here instead of silently defaulting.
+    pub fn dropped_arguments_tracked(&self, guide_step: usize) -> Vec<DroppedArgument> {
+        RoundData {
+            topic: String::new(),
+            pro_team: String::new(),
+            con_team: String::new(),
+            speaking_order: self.speaking_order.get(),
+            pro_rows: read_rows(self.pro_rows, true),
+            con_rows: read_rows(self.con_rows, true),
+            crossfire_notes: String::new(),
+            winner: None,
+            rfd: String::new(),
+            next_id: 0,
+        }
+        .dropped_arguments(guide_step)
     }
 
     /// The single `RoundData` construction list; `tracked` only selects
@@ -644,11 +660,26 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_and_tracked_snapshot_cover_every_field() {
+    fn snapshot_covers_every_field() {
         let data = distinctive_round();
         let state = RoundState::from_data(data.clone());
         assert_round_eq(&state.snapshot(), &data);
-        assert_round_eq(&state.snapshot_tracked(), &data);
+    }
+
+    #[test]
+    fn tracked_dropped_arguments_match_full_derivation() {
+        // Con-first `distinctive_round`: equality across steps proves the
+        // narrow tracked derivation (speaking order + rows only) agrees
+        // with the full-data derivation, speaking order included.
+        let data = distinctive_round();
+        let state = RoundState::from_data(data.clone());
+        for step in 0..=crate::model::GUIDE.len() {
+            assert_eq!(
+                state.dropped_arguments_tracked(step),
+                data.dropped_arguments(step),
+                "step {step}"
+            );
+        }
     }
 
     #[test]

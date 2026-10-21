@@ -590,7 +590,7 @@ impl RoundData {
 
     /// Arguments that look dropped at guide step `guide_step` (an index
     /// into this round's `SpeakingOrder::guide`). Pure so the ballot hints can be unit-tested and the
-    /// view only has to feed it a tracked snapshot.
+    /// view only has to feed it the tracked row/order inputs.
     ///
     /// Inferred drop: opponent's rebuttal is already over and *every*
     /// opponent-speech box in a completed-or-current speech on the row

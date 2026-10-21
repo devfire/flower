@@ -1,4 +1,6 @@
-use crate::model::{Mark, RoundData, SHORTHAND, SPEECH_COLS, Side, SpeakingOrder, sheet_for};
+use crate::model::{
+    DroppedArgument, Mark, RoundData, SHORTHAND, SPEECH_COLS, Side, SpeakingOrder, sheet_for,
+};
 use crate::progress::RoundProgress;
 use crate::shorthand::{InsertCtx, TextTarget, insert_shorthand};
 use crate::state::{
@@ -733,43 +735,48 @@ fn decision_text(state: &RoundState) -> String {
     state.snapshot().decision_text()
 }
 
+fn dropped_hint(d: &DroppedArgument) -> String {
+    let mut hint = if d.explicit {
+        format!(
+            "💤 {}'s “{}” — you marked this dropped; no {} answer counts against it.",
+            d.owner.label(),
+            d.name,
+            d.answerer.label()
+        )
+    } else {
+        format!(
+            "💤 {}'s “{}” got no {} answer in any speech so far",
+            d.owner.label(),
+            d.name,
+            d.answerer.label()
+        )
+    };
+    if d.extended {
+        hint.push_str(" ➜ It was extended — that can decide the round.");
+    } else if !d.explicit {
+        hint.push_str(" — if it was extended, it may decide the round.");
+    }
+    if d.key {
+        hint.push_str(" ⭐ You starred it as key.");
+    }
+    hint
+}
+
 #[component]
 fn DroppedHints(state: RoundState, step: RwSignal<usize>) -> impl IntoView {
-    // Tracked snapshot + the guide step: hints re-derive live as the
-    // judge types or taps a mark, and inferred drops are not flagged
-    // before their rebuttal is over (explicit 💤 marks are immediate).
+    // Memo over only the real inputs (speaking order, row titles/cells,
+    // guide step): typing in the topic, crossfire, or RFD boxes never
+    // re-derives hints, and the `Eq` hint list suppresses the downstream
+    // DOM rebuild whenever the computed hints are unchanged.
+    let hints = Memo::new(move |_| {
+        state
+            .dropped_arguments_tracked(step.get())
+            .iter()
+            .map(dropped_hint)
+            .collect::<Vec<String>>()
+    });
     move || {
-        let hints: Vec<String> = state
-            .snapshot_tracked()
-            .dropped_arguments(step.get())
-            .into_iter()
-            .map(|d| {
-                let mut hint = if d.explicit {
-                    format!(
-                        "💤 {}'s “{}” — you marked this dropped; no {} answer counts against it.",
-                        d.owner.label(),
-                        d.name,
-                        d.answerer.label()
-                    )
-                } else {
-                    format!(
-                        "💤 {}'s “{}” got no {} answer in any speech so far",
-                        d.owner.label(),
-                        d.name,
-                        d.answerer.label()
-                    )
-                };
-                if d.extended {
-                    hint.push_str(" ➜ It was extended — that can decide the round.");
-                } else if !d.explicit {
-                    hint.push_str(" — if it was extended, it may decide the round.");
-                }
-                if d.key {
-                    hint.push_str(" ⭐ You starred it as key.");
-                }
-                hint
-            })
-            .collect();
+        let hints = hints.get();
         if hints.is_empty() {
             view! { <p class="dropped-none">"✨ No clearly dropped arguments spotted yet — check for blank answer boxes on each row."</p> }.into_any()
         } else {
