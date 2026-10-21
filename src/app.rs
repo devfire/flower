@@ -84,6 +84,10 @@ pub fn App() -> impl IntoView {
     if loaded.data.topic.trim().is_empty() {
         loaded.data.topic.clone_from(&bundled_topic.resolution);
     }
+    // Issue #25: snapshot the field as spawned (after the auto-fill
+    // above). The late `topics.json` fetch may only replace this exact
+    // untouched value; a deliberate clear/edit since spawn must stick.
+    let topic_at_spawn = loaded.data.topic.clone();
     let initial_order = loaded.data.speaking_order;
     let state = RoundState::from_data(loaded.data);
     state.recovery_notice.set(loaded.recovery_notice);
@@ -109,6 +113,7 @@ pub fn App() -> impl IntoView {
                 if topic::decide(
                     &state_for_fetch.topic.get_untracked(),
                     &auto_filled,
+                    &topic_at_spawn,
                     &fetched,
                 ) == TopicAction::Prefill
                 {

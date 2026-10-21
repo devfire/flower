@@ -86,24 +86,34 @@ pub fn bundled() -> NsdaTopic {
 /// What to do with a candidate NSDA topic given what the field holds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TopicAction {
-    /// Field is empty, or still holds the stale auto-filled bundled
-    /// value: safe to fill with the candidate.
+    /// Field still holds the untouched auto-filled bundled value (or
+    /// was empty at spawn and is still empty): safe to fill.
     Prefill,
     /// Field already shows the candidate.
     UpToDate,
-    /// Judge has their own text: offer the candidate, never force it.
+    /// Judge has their own text, or touched the field since spawn:
+    /// offer the candidate, never force it.
     Offer,
 }
 
 /// Decide how `candidate` may enter a field currently holding `current`,
 /// where `auto_filled` is the bundled resolution the app itself put
-/// there on a fresh visit. Only auto-filled or empty text is replaced.
+/// there on a fresh visit and `spawned` is the field value captured at
+/// spawn (after that auto-fill). Only text the app put there and the
+/// judge has not touched since spawn is replaced: a field deliberately
+/// cleared after spawn no longer equals `spawned`, so it is only offered
+/// the candidate, never refilled.
 #[must_use]
-pub fn decide(current: &str, auto_filled: &str, candidate: &NsdaTopic) -> TopicAction {
+pub fn decide(current: &str, auto_filled: &str, spawned: &str, candidate: &NsdaTopic) -> TopicAction {
     let current = current.trim();
     if current == candidate.resolution.trim() {
         TopicAction::UpToDate
-    } else if current.is_empty() || current == auto_filled.trim() {
+    } else if current == spawned.trim() && (current.is_empty() || current == auto_filled.trim()) {
+        TopicAction::Prefill
+    } else {
+        TopicAction::Offer
+    }
+}   } else if current == spawned.trim() && (current.is_empty() || current == auto_filled.trim()) {
         TopicAction::Prefill
     } else {
         TopicAction::Offer
@@ -154,22 +164,47 @@ mod tests {
     }
 
     #[test]
-    fn empty_or_stale_autofill_is_prefilled_but_judge_text_is_only_offered() {
+    fn untouched_autofill_is_prefilled_but_touched_field_is_only_offered() {
         let new = candidate();
-        assert_eq!(decide("", "Resolved: Old.", &new), TopicAction::Prefill);
-        assert_eq!(decide("  ", "Resolved: Old.", &new), TopicAction::Prefill);
-        // Stale bundled auto-fill upgrades without asking.
+        // Empty at spawn (no bundled fill) and still empty: prefill.
+        assert_eq!(decide("", "Resolved: Old.", "", &new), TopicAction::Prefill);
         assert_eq!(
-            decide("Resolved: Old.", "Resolved: Old.", &new),
+            decide("  ", "Resolved: Old.", "", &new),
+            TopicAction::Prefill
+        );
+        // Stale bundled auto-fill, untouched since spawn, upgrades.
+        assert_eq!(
+            decide("Resolved: Old.", "Resolved: Old.", "Resolved: Old.", &new),
             TopicAction::Prefill
         );
         assert_eq!(
-            decide(&new.resolution, "Resolved: Old.", &new),
+            decide(&new.resolution, "Resolved: Old.", "Resolved: Old.", &new),
             TopicAction::UpToDate
         );
-        // A saved/typed topic is never overwritten, only offered.
+        // Issue #25: auto-fill deliberately cleared while the fetch was
+        // in flight stays empty — offered, never resurrected.
         assert_eq!(
-            decide("Resolved: My own wording.", "Resolved: Old.", &new),
+            decide("", "Resolved: Old.", "Resolved: Old.", &new),
+            TopicAction::Offer
+        );
+        // Saved topic deliberately cleared since spawn likewise.
+        assert_eq!(
+            decide("", "Resolved: Old.", "Resolved: My own wording.", &new),
+            TopicAction::Offer
+        );
+        // Any edit since spawn, and untouched saved judge text, are
+        // never overwritten, only offered.
+        assert_eq!(
+            decide("Resolved: Typed.", "Resolved: Old.", "Resolved: Old.", &new),
+            TopicAction::Offer
+        );
+        assert_eq!(
+            decide(
+                "Resolved: My own wording.",
+                "Resolved: Old.",
+                "Resolved: My own wording.",
+                &new
+            ),
             TopicAction::Offer
         );
     }
