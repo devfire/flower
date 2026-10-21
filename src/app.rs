@@ -465,7 +465,7 @@ pub fn App() -> impl IntoView {
                     <div class="save-warning" role="alert">
                         <p>{notice}</p>
                         <button class="btn btn-main" on:click=move |_| { s.recovery_notice.set(None); save(&s); }>
-                            "Start fresh & replace the old save"
+                            "Replace the saved round anyway"
                         </button>
                     </div>
                 }

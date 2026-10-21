@@ -5,7 +5,8 @@
 use std::cell::{Cell, RefCell};
 
 use crate::model::{
-    CellData, Mark, RoundData, RowData, STORAGE_BACKUP_KEY, STORAGE_KEY, Side, SpeakingOrder,
+    CellData, Mark, RoundData, RowData, STORAGE_BACKUP_KEY, STORAGE_KEY, STORAGE_REVISION_KEY,
+    Side, SpeakingOrder, next_revision, stored_revision,
 };
 use crate::progress::{PROGRESS_STORAGE_KEY, RoundProgress};
 use gloo_timers::callback::Timeout;
@@ -233,6 +234,16 @@ pub struct LoadedRound {
 
 pub fn load_initial() -> LoadedRound {
     let storage = web_sys::window().and_then(|w| w.local_storage().ok().flatten());
+    // Base for the cross-tab revision check in `write_snapshot`: the
+    // revision stored alongside the round this tab is about to load.
+    // An unreadable counter falls back to 0 here; the write-time re-read
+    // still tells corrupt apart from legacy and refuses to overwrite.
+    let loaded_revision = storage
+        .as_ref()
+        .and_then(|s| s.get_item(STORAGE_REVISION_KEY).ok())
+        .and_then(|raw| stored_revision(raw.as_deref()))
+        .unwrap_or(0);
+    KNOWN_REVISION.with(|known| known.set(Some(loaded_revision)));
     let stored = storage
         .as_ref()
         .and_then(|s| s.get_item(STORAGE_KEY).ok().flatten());
@@ -315,6 +326,12 @@ thread_local! {
     static PENDING_SAVE: RefCell<Option<PendingSave>> = const { RefCell::new(None) };
     static PENDING_PROGRESS_SAVE: RefCell<Option<PendingProgressSave>> = const { RefCell::new(None) };
     static FLUSH_HOOKS_INSTALLED: Cell<bool> = const { Cell::new(false) };
+    /// Revision this tab loaded (or last wrote) under `STORAGE_KEY`
+    /// (issue #18). `None` only after a cross-tab conflict was shown:
+    /// the recovery notice blocks autosaves until the judge explicitly
+    /// chooses to replace, and that one write is then allowed over
+    /// whatever revision is stored.
+    static KNOWN_REVISION: Cell<Option<u64>> = const { Cell::new(Some(0)) };
     /// Kept alive for the page's lifetime: dropping a `Closure` removes
     /// the event listener it backs.
     static FLUSH_LISTENERS: RefCell<Vec<FlushListener>> = const { RefCell::new(Vec::new()) };
@@ -394,11 +411,57 @@ fn write_snapshot(state: &RoundState) {
     if state.recovery_notice.get_untracked().is_some() {
         return;
     }
-    let storage = web_sys::window().and_then(|w| w.local_storage().ok().flatten());
-    let saved = match (storage, serde_json::to_string(&state.snapshot())) {
-        (Some(storage), Ok(json)) => storage.set_item(STORAGE_KEY, &json).is_ok(),
-        (Some(_), Err(_)) | (None, _) => false,
+    let Some(storage) = web_sys::window().and_then(|w| w.local_storage().ok().flatten()) else {
+        state.save_failed.set(true);
+        return;
     };
+    let Ok(json) = serde_json::to_string(&state.snapshot()) else {
+        state.save_failed.set(true);
+        return;
+    };
+    // Cross-tab guard (issue #18): never write over a revision this tab
+    // did not load or write itself — another tab saved first.
+    let stored = match storage.get_item(STORAGE_REVISION_KEY) {
+        Ok(raw) => stored_revision(raw.as_deref()),
+        Err(_) => None,
+    };
+    let next = match (KNOWN_REVISION.with(Cell::get), stored) {
+        (Some(known), Some(current)) => next_revision(known, current),
+        // Only reachable after a conflict was shown and the judge then
+        // chose to replace (notice dismissed or round replaced): that
+        // explicit write may go over whatever is stored.
+        (None, Some(current)) => current.checked_add(1),
+        (None, None) => Some(1),
+        (Some(_), None) => None,
+    };
+    let Some(next) = next else {
+        // Adopt the other tab's revision as this tab's base (or `None`
+        // when unreadable, the explicit-replace marker above) so the
+        // judge's dismissal write can proceed — but block every autosave
+        // until then via the recovery notice.
+        KNOWN_REVISION.with(|known| known.set(stored));
+        state.save_failed.set(true);
+        state.recovery_notice.set(Some(
+            "⚠️ Another tab or window with this app open saved a newer version of this \
+             round, so this tab stopped auto-saving to avoid overwriting it. Check the \
+             other tab first — if this tab's version should win after all, tap the \
+             button below to replace the newer save."
+                .to_owned(),
+        ));
+        return;
+    };
+    // Revision first: a failed round write then leaves a bumped counter
+    // (other tabs pause instead of overwriting), and this tab's known
+    // revision already matches it, so its retry is not self-blocked.
+    if storage
+        .set_item(STORAGE_REVISION_KEY, &next.to_string())
+        .is_err()
+    {
+        state.save_failed.set(true);
+        return;
+    }
+    KNOWN_REVISION.with(|known| known.set(Some(next)));
+    let saved = storage.set_item(STORAGE_KEY, &json).is_ok();
     state.save_failed.set(!saved);
 }
 

@@ -760,6 +760,35 @@ pub const STORAGE_KEY: &str = "flower-round-v1";
 /// Where an unreadable save is copied before the app starts blank, so the
 /// raw round is never silently overwritten (issue #2).
 pub const STORAGE_BACKUP_KEY: &str = "flower-round-v1-unreadable-backup";
+/// Monotonic autosave revision for `STORAGE_KEY` (issue #18). Kept in a
+/// separate key so the round JSON format itself is unchanged and older
+/// saves (which have no revision) load as revision 0.
+pub const STORAGE_REVISION_KEY: &str = "flower-round-v1-revision";
+
+/// Decode a stored revision: a missing key is a pre-revision (legacy)
+/// save at revision 0; an unparsable value is `None`, which callers must
+/// treat as unknown rather than as 0, so a corrupt counter is never
+/// silently reset under a newer tab.
+#[must_use]
+pub fn stored_revision(raw: Option<&str>) -> Option<u64> {
+    match raw {
+        None => Some(0),
+        Some(text) => text.parse().ok(),
+    }
+}
+
+/// The revision a tab may write next: only over the exact revision it
+/// loaded (or last wrote). Any other stored revision means another tab
+/// saved first, so this returns `None` and the caller must refuse to
+/// overwrite that newer save.
+#[must_use]
+pub fn next_revision(known: u64, stored: u64) -> Option<u64> {
+    if stored == known {
+        known.checked_add(1)
+    } else {
+        None
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -940,6 +969,23 @@ mod tests {
             panic!("MAX-1 save must load");
         };
         assert_eq!(loaded.next_id, u32::MAX);
+    }
+
+    #[test]
+    fn autosave_revision_only_advances_over_the_revision_this_tab_knows() {
+        // Legacy save (no revision key) and a tab that just wrote both
+        // count as being in step with storage.
+        assert_eq!(stored_revision(None), Some(0));
+        assert_eq!(stored_revision(Some("7")), Some(7));
+        assert_eq!(next_revision(0, 0), Some(1));
+        assert_eq!(next_revision(7, 7), Some(8));
+        // Another tab saved first (newer), or the counter went backwards
+        // (older tab / removed key): refuse rather than overwrite.
+        assert_eq!(next_revision(0, 1), None);
+        assert_eq!(next_revision(7, 3), None);
+        // A corrupt counter is unknown, never silently reset to 0.
+        assert_eq!(stored_revision(Some("banana")), None);
+        assert_eq!(stored_revision(Some("")), None);
     }
 
     #[test]
