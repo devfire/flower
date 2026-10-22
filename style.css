@@ -107,7 +107,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .confirm-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 
 /* ---------- setup ---------- */
-.setup-layout { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1fr) clamp(340px, 30vw, 460px); gap: 14px; align-items: stretch; }
+.setup-layout { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, .7fr) clamp(380px, 34vw, 540px); gap: 14px; align-items: stretch; }
 .setup-layout > * { min-width: 0; }
 /* Top edges line up with the topic input, below its label (label line + 6px field gap). */
 .setup-layout > .timer-box, .setup-layout > .bubble-wrap { margin-top: calc(.9rem * 1.4 + 6px); }
@@ -148,7 +148,8 @@ button, input, textarea { font: inherit; color: inherit; }
 .timer-label { font-weight: 800; color: #6b5410; font-size: .9rem; }
 .timer-digits { font-size: 1.9rem; font-weight: 700; line-height: 1; color: #6b5410; }
 .timer-digits.timer-done { color: #b3261e; animation: bob 1s ease-in-out infinite; }
-.timer-btns, .prep-row, .step-nav { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.timer-btns, .prep-row, .step-nav { display: flex; gap: 6px 6px; align-items: center; flex-wrap: wrap; }
+.prep-row > span:first-child { flex: 1 1 100%; }
 .timer-btns { justify-content: flex-end; }
 .timer-box .btn { padding: 5px 12px; }
 /* A prep chip ticking its own countdown: same raised affordance as other
@@ -336,7 +337,7 @@ button.fh-click { border: 2px solid transparent; cursor: pointer; text-align: le
   .cell textarea { min-height: 76px; }
 }
 @media (max-width: 1180px) {
-  .setup-layout { grid-template-columns: minmax(0, 1fr) 340px; }
+  .setup-layout { grid-template-columns: minmax(0, 1fr) 380px; }
   .setup-layout > .bubble-wrap { grid-column: 1 / -1; grid-row: 2; margin-top: 0; }
   .setup-layout > .timer-box { grid-column: 2; grid-row: 1; }
 }
