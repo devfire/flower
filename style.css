@@ -232,14 +232,14 @@ button.fh-click { border: 2px solid transparent; cursor: pointer; text-align: le
    appearing at some unrelated corner of the window. */
 .row-del-wrap { position: relative; flex: none; }
 .row-del-pop {
-  position: absolute; right: -6px; top: calc(100% + 7px); z-index: 30;
+  position: absolute; right: 0; top: calc(100% + 7px); z-index: 30;
   display: flex; flex-direction: column; gap: 7px; width: max-content;
   background: var(--surface); border: 2px solid #f0b7c3; border-radius: 14px;
   padding: 9px 10px; box-shadow: var(--shadow);
   font-size: .82rem; font-weight: 800;
 }
 .row-del-pop::before {
-  content: ""; position: absolute; top: -7px; right: 12px; width: 11px; height: 11px;
+  content: ""; position: absolute; top: -7px; right: 5px; width: 11px; height: 11px;
   background: var(--surface); border-left: 2px solid #f0b7c3; border-top: 2px solid #f0b7c3;
   transform: rotate(45deg);
 }
