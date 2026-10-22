@@ -72,7 +72,9 @@ pub fn plain_text(source: &str) -> String {
             }
             Event::SoftBreak | Event::HardBreak => out.push('\n'),
             Event::Start(Tag::Item) => out.push_str("- "),
-            Event::End(TagEnd::Paragraph | TagEnd::Heading(_) | TagEnd::Item | TagEnd::CodeBlock) => {
+            Event::End(
+                TagEnd::Paragraph | TagEnd::Heading(_) | TagEnd::Item | TagEnd::CodeBlock,
+            ) => {
                 out.push('\n');
             }
             _ => {}
