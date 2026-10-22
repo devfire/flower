@@ -113,7 +113,13 @@ fn FlowRow(
     let target = (side, row_id);
     let deleting_row = state.deleting_row;
     let confirming_delete = Memo::new(move |_| deleting_row.get() == Some(target));
-    let close_confirm = move || deleting_row.update(|open| if *open == Some(target) { *open = None; });
+    let close_confirm = move || {
+        deleting_row.update(|open| {
+            if *open == Some(target) {
+                *open = None;
+            }
+        });
+    };
     let keep_button = NodeRef::<leptos::html::Button>::new();
     Effect::new(move |_| {
         let keep = confirming_delete.get().then(|| keep_button.get()).flatten();
