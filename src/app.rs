@@ -220,10 +220,29 @@ pub fn App() -> impl IntoView {
             set_step.run(i);
         }
     });
+    // Prep chips tick independently of the speech display, but only one
+    // countdown ever runs: starting either pauses the other. Re-tapping
+    // a running chip pauses it; the speech display, label and sheet are
+    // never touched by prep — there is no mode to return from.
+    let prep_running = RwSignal::new(None::<Side>);
+    let prep_deadline = StoredValue::new_local(None::<f64>);
+    let prep_interval = StoredValue::new_local(None::<Interval>);
+    let stop_prep = move || {
+        if let (Some(end), Some(now)) = (prep_deadline.get_value(), now_ms())
+            && let Some(side) = prep_running.get_untracked()
+        {
+            timer_bank.update(|b| b.set_prep(side, ceil_secs(end - now)));
+        }
+        persist_progress.run(());
+        prep_running.set(None);
+        prep_deadline.set_value(None);
+        prep_interval.set_value(None);
+    };
     let toggle_timer = move |_: web_sys::MouseEvent| {
         if running.get_untracked() {
             stop_timer();
         } else if timer_secs.get_untracked() > 0 {
+            stop_prep();
             let start = timer_secs.get_untracked();
             timer_announcement.set(String::new());
             if arm_countdown(
@@ -252,25 +271,6 @@ pub fn App() -> impl IntoView {
                 running.set(true);
             }
         }
-    };
-    // Each prep chip runs its own countdown in place: tapping Pro/Con
-    // starts or pauses that team's balance without touching the speech
-    // display, label, or sheet — there is no mode to return from.
-    // Re-tapping a running chip pauses it; starting one chip pauses the
-    // other chip and the speech timer so only one countdown runs.
-    let prep_running = RwSignal::new(None::<Side>);
-    let prep_deadline = StoredValue::new_local(None::<f64>);
-    let prep_interval = StoredValue::new_local(None::<Interval>);
-    let stop_prep = move || {
-        if let (Some(end), Some(now)) = (prep_deadline.get_value(), now_ms())
-            && let Some(side) = prep_running.get_untracked()
-        {
-            timer_bank.update(|b| b.set_prep(side, ceil_secs(end - now)));
-        }
-        persist_progress.run(());
-        prep_running.set(None);
-        prep_deadline.set_value(None);
-        prep_interval.set_value(None);
     };
     let toggle_prep = move |side: Side| {
         if prep_running.get_untracked() == Some(side) {
