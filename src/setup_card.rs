@@ -5,7 +5,7 @@ use crate::guide::{GUIDE, GuideStep};
 use crate::model::Side;
 use crate::shorthand::{InsertCtx, TextTarget};
 use crate::state::{RoundState, save};
-use crate::timer::{TimerBank, TimerKind, fmt_time};
+use crate::timer::{TimerBank, fmt_time};
 use crate::topic::NsdaTopic;
 use leptos::prelude::*;
 
@@ -20,11 +20,12 @@ pub(crate) struct SetupProps<F, G, H> {
     pub(crate) timer_announcement: RwSignal<String>,
     pub(crate) running: RwSignal<bool>,
     pub(crate) timer_bank: RwSignal<TimerBank>,
+    pub(crate) prep_running: RwSignal<Option<Side>>,
     pub(crate) pending_confirm: RwSignal<Option<PendingConfirm>>,
     pub(crate) set_step: Callback<usize>,
     pub(crate) toggle_timer: F,
-    pub(crate) reset_or_back: G,
-    pub(crate) start_prep: H,
+    pub(crate) reset_speech: G,
+    pub(crate) toggle_prep: H,
 }
 
 // Pedantic `too_many_lines`: one cohesive card view; splitting it would
@@ -34,7 +35,7 @@ pub(crate) fn setup_card<F, G, H>(props: SetupProps<F, G, H>) -> impl IntoView
 where
     F: Fn(web_sys::MouseEvent) + 'static,
     G: Fn(web_sys::MouseEvent) + 'static,
-    H: Fn(Side) + 'static,
+    H: Fn(Side) + Copy + 'static,
 {
     let SetupProps {
         state,
@@ -47,13 +48,13 @@ where
         timer_announcement,
         running,
         timer_bank,
+        prep_running,
         pending_confirm,
         set_step,
         toggle_timer,
-        reset_or_back,
-        start_prep,
+        reset_speech,
+        toggle_prep,
     } = props;
-    let start_prep = std::rc::Rc::new(start_prep);
     let st_saved = state.clone();
     let st_topic = state.clone();
     view! {
@@ -138,21 +139,29 @@ where
                                 <button class="btn btn-main" on:click=toggle_timer>
                                     {move || if running.get() { "⏸ Pause" } else { "▶ Start" }}
                                 </button>
-                                <button class="btn btn-soft" on:click=reset_or_back>
-                                    {move || if matches!(timer_bank.get().active(), TimerKind::Prep(_)) { "↺ Back to speech" } else { "↺ Reset" }}
-                                </button>
+                                <button class="btn btn-soft" on:click=reset_speech>"↺ Reset"</button>
                             </div>
                         </div>
                         <div class="prep-row">
                             <span>"Prep left (3m/team):"</span>
-                            <button class="btn btn-chip btn-pro" on:click={let f = start_prep.clone(); move |_| f(Side::Pro)}>
-                                {move || format!("Pro · {}", fmt_time(timer_bank.get().secs_for(TimerKind::Prep(Side::Pro), timer_secs.get())))}
+                            <button class="btn btn-chip btn-pro" class:chip-on=move || prep_running.get() == Some(Side::Pro)
+                                aria-pressed=move || if prep_running.get() == Some(Side::Pro) { "true" } else { "false" }
+                                on:click=move |_| toggle_prep(Side::Pro)>
+                                {move || {
+                                    let action = if prep_running.get() == Some(Side::Pro) { "❚❚" } else { "▶" };
+                                    format!("Pro · {} · {action}", fmt_time(timer_bank.get().prep_secs(Side::Pro)))
+                                }}
                             </button>
                             <button class="btn btn-chip" title="Reset only Pro prep back to 3:00" aria-label="Reset only Pro prep back to 3:00" aria-haspopup="dialog"
                                 aria-expanded=move || if pending_confirm.get() == Some(PendingConfirm::ResetPrep(Side::Pro)) { "true" } else { "false" }
                                 on:click=move |_| pending_confirm.set(Some(PendingConfirm::ResetPrep(Side::Pro)))>"↺ "</button>
-                            <button class="btn btn-chip btn-con" on:click={let f = start_prep.clone(); move |_| f(Side::Con)}>
-                                {move || format!("Con · {}", fmt_time(timer_bank.get().secs_for(TimerKind::Prep(Side::Con), timer_secs.get())))}
+                            <button class="btn btn-chip btn-con" class:chip-on=move || prep_running.get() == Some(Side::Con)
+                                aria-pressed=move || if prep_running.get() == Some(Side::Con) { "true" } else { "false" }
+                                on:click=move |_| toggle_prep(Side::Con)>
+                                {move || {
+                                    let action = if prep_running.get() == Some(Side::Con) { "❚❚" } else { "▶" };
+                                    format!("Con · {} · {action}", fmt_time(timer_bank.get().prep_secs(Side::Con)))
+                                }}
                             </button>
                             <button class="btn btn-chip" title="Reset only Con prep back to 3:00" aria-label="Reset only Con prep back to 3:00" aria-haspopup="dialog"
                                 aria-expanded=move || if pending_confirm.get() == Some(PendingConfirm::ResetPrep(Side::Con)) { "true" } else { "false" }

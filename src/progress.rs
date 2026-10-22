@@ -1,15 +1,14 @@
 //! Round progress that is not flow content: where the guided walk is,
-//! each team's remaining prep balance, the speech remainder, the sheet
+//! the speech remainder, each team's remaining prep balance, the sheet
 //! on screen, and focus mode (issue #17).
 //!
 //! Saved under its own `localStorage` key, separate from the round JSON:
 //! it changes on every timer tick, while the flow changes per keystroke,
 //! and an old save without progress must still load its flow untouched.
-
 use serde::{Deserialize, Serialize};
 
 use crate::model::{GUIDE, Side};
-use crate::timer::{PREP_SECS, TimerBank, TimerKind};
+use crate::timer::{PREP_SECS, TimerBank};
 
 pub const PROGRESS_STORAGE_KEY: &str = "flower-progress-v1";
 
@@ -23,13 +22,10 @@ pub struct RoundProgress {
     step: usize,
     tab: Side,
     focus_mode: bool,
-    /// Banked speech remainder; the displayed value when a prep timer is
-    /// on screen instead.
+    /// Speech timer remainder (always the on-screen countdown).
     speech_secs: i32,
     pro_prep_secs: i32,
     con_prep_secs: i32,
-    /// Which prep timer is on screen, or `None` for the speech timer.
-    active_prep: Option<Side>,
 }
 
 /// Wire shape of a progress save. `#[serde(default)]`: a save missing a
@@ -44,6 +40,8 @@ struct SavedProgress {
     speech_secs: i32,
     pro_prep_secs: i32,
     con_prep_secs: i32,
+    /// Pre-chip-countdown save shape: accepted and ignored, so old
+    /// saves still load without resurrecting the mode switch.
     active_prep: Option<Side>,
 }
 
@@ -57,7 +55,7 @@ impl Default for SavedProgress {
             speech_secs: fresh.speech_secs,
             pro_prep_secs: fresh.pro_prep_secs,
             con_prep_secs: fresh.con_prep_secs,
-            active_prep: fresh.active_prep,
+            active_prep: None,
         }
     }
 }
@@ -71,7 +69,6 @@ impl From<SavedProgress> for RoundProgress {
             speech_secs: saved.speech_secs,
             pro_prep_secs: saved.pro_prep_secs,
             con_prep_secs: saved.con_prep_secs,
-            active_prep: saved.active_prep,
         }
         .normalised()
     }
@@ -86,14 +83,13 @@ impl Default for RoundProgress {
             speech_secs: (GUIDE[0].minutes * 60).cast_signed(),
             pro_prep_secs: PREP_SECS,
             con_prep_secs: PREP_SECS,
-            active_prep: None,
         }
     }
 }
 
 impl RoundProgress {
-    /// Snapshot the live App signals. `displayed` is the on-screen timer
-    /// value; `bank` holds the remainders of the timers not on screen.
+    /// Snapshot the live App signals. `displayed` is the on-screen
+    /// speech value; `bank` holds every remainder at once.
     #[must_use]
     pub fn capture(
         step: usize,
@@ -106,13 +102,9 @@ impl RoundProgress {
             step,
             tab,
             focus_mode,
-            speech_secs: bank.secs_for(TimerKind::Speech, displayed),
-            pro_prep_secs: bank.secs_for(TimerKind::Prep(Side::Pro), displayed),
-            con_prep_secs: bank.secs_for(TimerKind::Prep(Side::Con), displayed),
-            active_prep: match bank.active() {
-                TimerKind::Speech => None,
-                TimerKind::Prep(side) => Some(side),
-            },
+            speech_secs: displayed.max(0),
+            pro_prep_secs: bank.prep_secs(Side::Pro),
+            con_prep_secs: bank.prep_secs(Side::Con),
         }
         .normalised()
     }
@@ -144,12 +136,6 @@ impl RoundProgress {
         self.focus_mode
     }
 
-    /// Which prep timer is on screen, or `None` for the speech timer.
-    #[must_use]
-    pub const fn active_prep(&self) -> Option<Side> {
-        self.active_prep
-    }
-
     /// Clamp every field to a value the UI can use directly: a step that
     /// exists in `GUIDE`, a non-negative speech remainder no longer than
     /// the longest speech, and prep balances within `0..=PREP_SECS`.
@@ -166,24 +152,13 @@ impl RoundProgress {
     /// The timer bank to restore on load.
     #[must_use]
     pub fn timer_bank(&self) -> TimerBank {
-        let active = self.active_prep.map_or(TimerKind::Speech, TimerKind::Prep);
-        TimerBank::restored(
-            self.speech_secs,
-            self.pro_prep_secs,
-            self.con_prep_secs,
-            active,
-        )
+        TimerBank::restored(self.speech_secs, self.pro_prep_secs, self.con_prep_secs)
     }
 
-    /// Seconds the timer display should show on load: the on-screen
-    /// timer's remainder, whichever kind that is.
+    /// Seconds the speech timer display should show on load.
     #[must_use]
-    pub fn displayed_secs(&self) -> i32 {
-        match self.active_prep {
-            None => self.speech_secs,
-            Some(Side::Pro) => self.pro_prep_secs,
-            Some(Side::Con) => self.con_prep_secs,
-        }
+    pub const fn displayed_secs(&self) -> i32 {
+        self.speech_secs
     }
 }
 
@@ -203,7 +178,7 @@ mod tests {
     }
 
     #[test]
-    fn saved_progress_round_trips_step_balances_and_active_timer() {
+    fn saved_progress_round_trips_step_and_balances() {
         // Repro from issue #17: Con Rebuttal (step 4), 2:00 of Pro prep
         // burned, Con sheet on screen, speech paused at 1:30.
         let saved = RoundProgress {
@@ -213,31 +188,45 @@ mod tests {
             speech_secs: 90,
             pro_prep_secs: 60,
             con_prep_secs: PREP_SECS,
-            active_prep: Some(Side::Pro),
         };
         let json = serde_json::to_string(&saved).unwrap_or_default();
         let Ok(loaded) = RoundProgress::from_saved_json(&json) else {
             panic!("saved progress must reload");
         };
         assert_eq!(loaded, saved);
-        // On-screen timer is Pro prep: display shows its 1:00, while the
-        // banked speech remainder survives behind it.
-        assert_eq!(loaded.displayed_secs(), 60);
+        // The speech display shows its own 1:30 remainder; prep balances
+        // ride along untouched.
+        assert_eq!(loaded.displayed_secs(), 90);
         let bank = loaded.timer_bank();
-        assert_eq!(bank.active(), TimerKind::Prep(Side::Pro));
-        assert_eq!(bank.secs_for(TimerKind::Speech, 60), 90);
+        assert_eq!(bank.speech_secs(), 90);
+        assert_eq!(bank.prep_secs(Side::Pro), 60);
         assert_eq!(bank.prep_secs(Side::Con), PREP_SECS);
     }
 
     #[test]
-    fn capture_banks_displayed_value_into_active_timer_only() {
-        let mut bank = TimerBank::new(240);
-        bank.switch_to(TimerKind::Prep(Side::Pro));
+    fn old_prep_mode_save_still_loads_without_resurrecting_it() {
+        let Ok(loaded) =
+            RoundProgress::from_saved_json(r#"{"step":4,"active_prep":"Pro","pro_prep_secs":60}"#)
+        else {
+            panic!("old progress shape must load");
+        };
+        assert_eq!(loaded.step, 4);
+        assert_eq!(
+            loaded.displayed_secs(),
+            (GUIDE[0].minutes * 60).cast_signed()
+        );
+        assert_eq!(loaded.pro_prep_secs, 60);
+        assert_eq!(loaded.timer_bank().prep_secs(Side::Pro), 60);
+    }
+
+    #[test]
+    fn capture_banks_speech_display_and_prep_balances() {
+        let mut bank = TimerBank::restored(240, PREP_SECS, PREP_SECS);
+        bank.set_prep(Side::Pro, 100);
         let p = RoundProgress::capture(4, Side::Con, true, 75, bank);
         assert_eq!(p.step, 4);
-        assert_eq!(p.active_prep, Some(Side::Pro));
-        assert_eq!(p.pro_prep_secs, 75, "displayed prep value must be banked");
-        assert_eq!(p.speech_secs, 240, "banked speech remainder must survive");
+        assert_eq!(p.speech_secs, 75, "speech display must be banked");
+        assert_eq!(p.pro_prep_secs, 100, "prep balance must ride along");
         assert_eq!(p.con_prep_secs, PREP_SECS);
     }
 

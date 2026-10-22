@@ -10,11 +10,51 @@ use crate::shorthand::{InsertCtx, TextTarget, insert_shorthand};
 use crate::state::{
     RoundState, load_initial, now_ms, save, save_progress, timer_expired_feedback, unlock_audio,
 };
-use crate::timer::{TimerBank, TimerKind, ceil_secs, tick_secs};
+use crate::timer::{TimerBank, ceil_secs, tick_secs};
 use crate::topic::{self, TopicAction};
 use gloo_timers::callback::Interval;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
+
+/// Arm a 250 ms wall-clock countdown ticking down from `start_secs`.
+/// The `on_tick`/`on_expire` callbacks run inside the interval tick;
+/// the caller banks remainders and persists there. Returns `false` when
+/// no clock is available (caller must leave its active flag cleared).
+/// Slots are passed by value (`StoredValue` is `Copy`) so the `'static`
+/// interval captures them instead of borrowing caller locals.
+fn arm_countdown(
+    start_secs: i32,
+    slot_interval: StoredValue<Option<Interval>, LocalStorage>,
+    slot_deadline: StoredValue<Option<f64>, LocalStorage>,
+    audio_ctx: StoredValue<Option<web_sys::AudioContext>, LocalStorage>,
+    current: impl Fn() -> i32 + Copy + 'static,
+    on_tick: impl Fn(i32) + Copy + 'static,
+    on_expire: impl Fn() + Copy + 'static,
+) -> bool {
+    let Some(now) = now_ms() else { return false };
+    slot_deadline.set_value(Some(now + f64::from(start_secs) * 1_000.0));
+    if audio_ctx.get_value().is_none() {
+        audio_ctx.set_value(unlock_audio());
+    }
+    slot_interval.set_value(Some(Interval::new(250, move || {
+        let (Some(end), Some(now)) = (slot_deadline.get_value(), now_ms()) else {
+            return;
+        };
+        let remaining_ms = end - now;
+        if remaining_ms <= 0.0 {
+            // Clear first: a re-entrant tap during expiry must see idle.
+            slot_deadline.set_value(None);
+            slot_interval.set_value(None);
+            on_expire();
+        } else if let Some(secs) = tick_secs(remaining_ms, current()) {
+            // Most 250 ms ticks land in the displayed second: skip the
+            // callback entirely for those, so subscribers are not
+            // notified with the same value.
+            on_tick(secs);
+        }
+    })));
+    true
+}
 
 // Pedantic `too_many_lines`: the Leptos root component owns every
 // round/timer signal and callback the view closes over; splitting it
@@ -93,22 +133,20 @@ pub fn App() -> impl IntoView {
         });
     }
     // Issue #17: restore the walk, timers and sheet from the progress
-    // save. The timer itself never auto-resumes after a reload — only
-    // its remainder does; the judge presses Start again.
+    // save. Neither timer auto-resumes after a reload — only the
+    // remainders do; the judge presses Start again.
     let progress = loaded.progress;
     let step = RwSignal::new(progress.step());
     let tab = RwSignal::new(progress.tab());
     let focus_mode = RwSignal::new(progress.focus_mode());
     let insert_ctx = InsertCtx::new();
     let timer_secs = RwSignal::new(progress.displayed_secs());
-    // Remainders of the timers not on screen: the speech timer plus each
-    // team's whole-round prep balance (issue #6). Banking the display
-    // into this on every freeze/tick is what lets timers survive switches.
+    // All three remainders at once: the speech countdown plus each
+    // team's whole-round prep balance (issue #6). The speech display
+    // banks into this on every freeze/tick; each prep chip banks into
+    // it on its own ticks.
     let timer_bank = RwSignal::new(progress.timer_bank());
-    let timer_label = RwSignal::new(match progress.active_prep() {
-        Some(side) => format!("{} prep time ⏱️", side.label()),
-        None => initial_order.guide()[progress.step()].title.to_string(),
-    });
+    let timer_label = RwSignal::new(initial_order.guide()[progress.step()].title.to_string());
     let timer_announcement = RwSignal::new(String::new());
     let running = RwSignal::new(false);
     let copy_feedback = RwSignal::new(None::<&'static str>);
@@ -144,7 +182,7 @@ pub fn App() -> impl IntoView {
         {
             timer_secs.set(ceil_secs(end - now));
         }
-        timer_bank.update(|b| b.bank_displayed(timer_secs.get_untracked()));
+        timer_bank.update(|b| b.bank_speech(timer_secs.get_untracked()));
         persist_progress.run(());
         running.set(false);
         deadline.set_value(None);
@@ -186,94 +224,105 @@ pub fn App() -> impl IntoView {
         if running.get_untracked() {
             stop_timer();
         } else if timer_secs.get_untracked() > 0 {
-            let Some(now) = now_ms() else { return };
-            deadline.set_value(Some(now + f64::from(timer_secs.get_untracked()) * 1_000.0));
+            let start = timer_secs.get_untracked();
             timer_announcement.set(String::new());
-            if audio_ctx.get_value().is_none() {
-                audio_ctx.set_value(unlock_audio());
-            }
-            running.set(true);
-            interval.set_value(Some(Interval::new(250, move || {
-                let (Some(end), Some(now)) = (deadline.get_value(), now_ms()) else {
-                    return;
-                };
-                let remaining_ms = end - now;
-                if remaining_ms <= 0.0 {
+            if arm_countdown(
+                start,
+                interval,
+                deadline,
+                audio_ctx,
+                move || timer_secs.get_untracked(),
+                move |secs| {
+                    timer_secs.set(secs);
+                    timer_bank.update(|b| b.bank_speech(secs));
+                    persist_progress.run(());
+                },
+                move || {
                     timer_secs.set(0);
-                    timer_bank.update(|b| b.bank_displayed(0));
+                    timer_bank.update(|b| b.bank_speech(0));
                     running.set(false);
-                    deadline.set_value(None);
-                    interval.set_value(None);
                     timer_announcement.set(format!(
                         "Time! {} has finished.",
                         timer_label.get_untracked()
                     ));
                     timer_expired_feedback(audio_ctx.get_value().as_ref());
                     persist_progress.run(());
-                } else if let Some(secs) = tick_secs(remaining_ms, timer_secs.get_untracked()) {
-                    // Most 250 ms ticks land in the displayed second:
-                    // skip the writes and persist entirely for those,
-                    // so subscribers are not notified with the same value.
-                    timer_secs.set(secs);
-                    timer_bank.update(|b| b.bank_displayed(secs));
-                    persist_progress.run(());
-                }
-            })));
+                },
+            ) {
+                running.set(true);
+            }
         }
     };
-    // Entering prep resumes that team's remaining balance — never a
-    // fresh 3:00. `stop_timer` has already banked the outgoing timer.
-    let start_prep = move |side: Side| {
-        stop_timer();
-        timer_bank.update(|b| {
-            b.switch_to(TimerKind::Prep(side));
-        });
-        timer_secs.set(timer_bank.get_untracked().prep_secs(side));
-        timer_label.set(format!("{} prep time ⏱️", side.label()));
-        timer_announcement.set(String::new());
+    // Each prep chip runs its own countdown in place: tapping Pro/Con
+    // starts or pauses that team's balance without touching the speech
+    // display, label, or sheet — there is no mode to return from.
+    // Re-tapping a running chip pauses it; starting one chip pauses the
+    // other chip and the speech timer so only one countdown runs.
+    let prep_running = RwSignal::new(None::<Side>);
+    let prep_deadline = StoredValue::new_local(None::<f64>);
+    let prep_interval = StoredValue::new_local(None::<Interval>);
+    let stop_prep = move || {
+        if let (Some(end), Some(now)) = (prep_deadline.get_value(), now_ms())
+            && let Some(side) = prep_running.get_untracked()
+        {
+            timer_bank.update(|b| b.set_prep(side, ceil_secs(end - now)));
+        }
         persist_progress.run(());
+        prep_running.set(None);
+        prep_deadline.set_value(None);
+        prep_interval.set_value(None);
+    };
+    let toggle_prep = move |side: Side| {
+        if prep_running.get_untracked() == Some(side) {
+            stop_prep();
+        } else if timer_bank.get_untracked().prep_secs(side) > 0 {
+            stop_prep();
+            stop_timer();
+            let start = timer_bank.get_untracked().prep_secs(side);
+            timer_announcement.set(String::new());
+            if arm_countdown(
+                start,
+                prep_interval,
+                prep_deadline,
+                audio_ctx,
+                move || timer_bank.get_untracked().prep_secs(side),
+                move |secs| {
+                    timer_bank.update(|b| b.set_prep(side, secs));
+                    persist_progress.run(());
+                },
+                move || {
+                    timer_bank.update(|b| b.set_prep(side, 0));
+                    prep_running.set(None);
+                    timer_announcement.set(format!("Time! {} prep has finished.", side.label()));
+                    timer_expired_feedback(audio_ctx.get_value().as_ref());
+                    persist_progress.run(());
+                },
+            ) {
+                prep_running.set(Some(side));
+            }
+        }
     };
     // The only way a prep balance returns to 3:00: this explicit,
-    // per-team action. Resetting the on-screen prep stops its countdown;
-    // resetting the other team's prep disturbs nothing else.
+    // per-team action. Resetting a running chip stops its countdown;
+    // the speech display is never touched.
     let reset_prep = move |side: Side| {
-        let on_screen = timer_bank.get_untracked().active() == TimerKind::Prep(side);
-        if on_screen {
-            stop_timer();
+        if prep_running.get_untracked() == Some(side) {
+            stop_prep();
         }
-        let mut shown = timer_secs.get_untracked();
-        timer_bank.update(|b| {
-            shown = b.reset_prep(side, shown);
-        });
-        if on_screen {
-            timer_secs.set(shown);
-        }
+        timer_bank.update(|b| b.reset_prep(side));
         persist_progress.run(());
     };
-    // Shared Reset: in prep it only returns to the (preserved) speech
-    // timer — it must never silently refill prep. During a speech it
-    // restarts that speech's full time, as before.
-    let reset_or_back = move |_: web_sys::MouseEvent| {
+    // Shared Reset restarts the current speech's full time. Prep needs
+    // no return step: the speech timer never left the screen.
+    let reset_speech = move |_: web_sys::MouseEvent| {
         stop_timer();
-        if matches!(timer_bank.get_untracked().active(), TimerKind::Prep(_)) {
-            // Read the banked speech remainder before Speech becomes the
-            // active kind (`secs_for` reports the display for the active one).
-            let speech_secs = timer_bank.get_untracked().secs_for(TimerKind::Speech, 0);
-            timer_bank.update(|b| {
-                b.switch_to(TimerKind::Speech);
-            });
-            timer_secs.set(speech_secs);
-        } else {
-            let full = (guide.get_untracked()[step.get_untracked()].minutes * 60).cast_signed();
-            timer_bank.update(|b| {
-                b.start_speech(full);
-            });
-            timer_secs.set(full);
-        }
+        let full = (guide.get_untracked()[step.get_untracked()].minutes * 60).cast_signed();
+        timer_bank.update(|b| {
+            b.start_speech(full);
+        });
+        timer_secs.set(full);
         let current = guide.get_untracked()[step.get_untracked()];
         timer_label.set(current.title.to_string());
-        // (Re-)entering a speech must show its write-sheet: prep entry
-        // and manual tab switches can leave the other sheet visible.
         if let Some(side) = sheet_for(&current) {
             tab.set(side);
         }
@@ -292,12 +341,10 @@ pub fn App() -> impl IntoView {
     let apply_order = Callback::new(move |order: SpeakingOrder| {
         st_order.speaking_order.set(order);
         save(&st_order);
-        if !matches!(timer_bank.get_untracked().active(), TimerKind::Prep(_)) {
-            let g = order.guide()[step.get_untracked()];
-            timer_label.set(g.title.to_string());
-            if let Some(side) = sheet_for(&g) {
-                tab.set(side);
-            }
+        let g = order.guide()[step.get_untracked()];
+        timer_label.set(g.title.to_string());
+        if let Some(side) = sheet_for(&g) {
+            tab.set(side);
         }
         persist_progress.run(());
     });
@@ -333,8 +380,10 @@ pub fn App() -> impl IntoView {
     // walk/balances replace the saved progress, so a reload cannot
     // resurrect the previous round's step or prep.
     let reset_round_walk = Callback::new(move |()| {
+        stop_prep();
         set_step.run(0);
         timer_bank.update(TimerBank::reset_all_prep);
+        prep_running.set(None);
         persist_progress.run(());
     });
     let start_new_round = Callback::new(move |()| {
@@ -392,11 +441,12 @@ pub fn App() -> impl IntoView {
                 timer_announcement,
                 running,
                 timer_bank,
+                prep_running,
                 pending_confirm,
                 set_step,
                 toggle_timer,
-                reset_or_back,
-                start_prep,
+                reset_speech,
+                toggle_prep,
             })}
             // ---------- Flow sheets ----------
             <section class="card flow-card">

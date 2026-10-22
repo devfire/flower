@@ -151,7 +151,9 @@ button, input, textarea { font: inherit; color: inherit; }
 .timer-btns, .prep-row, .step-nav { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .timer-btns { justify-content: flex-end; }
 .timer-box .btn { padding: 5px 12px; }
-.prep-row { font-size: .82rem; font-weight: 800; color: var(--muted); border-top: 2px dashed #f2df8e; padding-top: 6px; justify-content: flex-start; }
+/* A prep chip ticking its own countdown: same raised affordance as other
+   active toggles (order buttons), so "running" reads without new color. */
+.btn-chip.chip-on { outline: 3px solid var(--sky); box-shadow: 0 6px 14px rgba(74,63,85,.14); }
 .step-nav { justify-content: space-between; }
 .focus-toggle { display: flex; gap: 10px; align-items: flex-start; margin: 16px 0 12px; background: #eef6ff; border: 2px solid var(--lav); border-radius: 14px; padding: 12px 14px; cursor: pointer; line-height: 1.45; }
 .focus-toggle input { width: 20px; height: 20px; accent-color: #2f7fb8; margin-top: 2px; }

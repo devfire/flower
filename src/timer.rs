@@ -1,10 +1,11 @@
 //! Pure timer bookkeeping: one speech timer plus a separate 3:00 prep
 //! balance per team (PF prep is a whole-round budget, not per-use).
 //!
-//! The UI keeps a single displayed countdown; this bank remembers the
-//! remainder of whichever timer is *not* on screen, so switching between
-//! a speech and either team's prep never destroys another timer's state.
-//! Only the explicit per-team reset restores a prep balance to 3:00.
+//! The bank holds all three remainders at once. The main timer always
+//! shows the speech countdown; each prep chip shows its own balance and
+//! ticks it down in place, so starting prep never swaps the display or
+//! needs a "back to speech" step. Only the explicit per-team reset
+//! restores a prep balance to 3:00.
 
 use crate::model::Side;
 
@@ -52,66 +53,34 @@ pub fn tick_secs(remaining_ms: f64, displayed: i32) -> Option<i32> {
     (secs != displayed).then_some(secs)
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum TimerKind {
-    Speech,
-    Prep(Side),
-}
-
+/// Parallel countdown remainders — the shared `*_secs` suffix is the
+/// point, so the pedantic field-names lint is a false positive here.
+#[allow(clippy::struct_field_names)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct TimerBank {
-    active: TimerKind,
     speech_secs: i32,
     pro_prep_secs: i32,
     con_prep_secs: i32,
 }
 
 impl TimerBank {
+    /// Rebuild a bank from saved remainders (issue #17), clamped to
+    /// `0..=PREP_SECS` for prep: a hand-edited or stale save can never
+    /// resurrect more prep than a team starts with, or a negative
+    /// speech remainder.
     #[must_use]
-    pub fn new(speech_secs: i32) -> Self {
+    pub fn restored(speech_secs: i32, pro_prep_secs: i32, con_prep_secs: i32) -> Self {
         Self {
-            active: TimerKind::Speech,
             speech_secs: speech_secs.max(0),
-            pro_prep_secs: PREP_SECS,
-            con_prep_secs: PREP_SECS,
+            pro_prep_secs: pro_prep_secs.clamp(0, PREP_SECS),
+            con_prep_secs: con_prep_secs.clamp(0, PREP_SECS),
         }
     }
 
-    /// Rebuild a bank from saved remainders (issue #17), clamped to the
-    /// same ranges `bank_displayed` enforces: a hand-edited or stale save
-    /// can never resurrect more prep than a team starts with, or a
-    /// negative speech remainder.
+    #[cfg(test)]
     #[must_use]
-    pub fn restored(
-        speech_secs: i32,
-        pro_prep_secs: i32,
-        con_prep_secs: i32,
-        active: TimerKind,
-    ) -> Self {
-        let mut bank = Self::new(speech_secs);
-        bank.active = active;
-        bank.pro_prep_secs = pro_prep_secs.clamp(0, PREP_SECS);
-        bank.con_prep_secs = con_prep_secs.clamp(0, PREP_SECS);
-        bank
-    }
-
-    #[must_use]
-    pub fn active(self) -> TimerKind {
-        self.active
-    }
-
-    /// Seconds the display should show for `kind`, given the live display
-    /// value `displayed` when `kind` is the active timer.
-    #[must_use]
-    pub fn secs_for(self, kind: TimerKind, displayed: i32) -> i32 {
-        if kind == self.active {
-            displayed.max(0)
-        } else {
-            match kind {
-                TimerKind::Speech => self.speech_secs,
-                TimerKind::Prep(side) => self.prep_secs(side),
-            }
-        }
+    pub const fn speech_secs(self) -> i32 {
+        self.speech_secs
     }
 
     #[must_use]
@@ -122,28 +91,10 @@ impl TimerBank {
         }
     }
 
-    /// Bank the live display value into the active timer's slot. Call
-    /// whenever the display freezes or ticks, before switching away.
-    pub fn bank_displayed(&mut self, displayed: i32) {
-        match self.active {
-            TimerKind::Speech => self.speech_secs = displayed.max(0),
-            TimerKind::Prep(Side::Pro) => {
-                self.pro_prep_secs = displayed.clamp(0, PREP_SECS);
-            }
-            TimerKind::Prep(Side::Con) => {
-                self.con_prep_secs = displayed.clamp(0, PREP_SECS);
-            }
-        }
-    }
-
-    /// Make `kind` the displayed timer and return its remaining seconds.
-    /// The outgoing timer must already be banked via `bank_displayed`.
-    pub fn switch_to(&mut self, kind: TimerKind) -> i32 {
-        self.active = kind;
-        match kind {
-            TimerKind::Speech => self.speech_secs,
-            TimerKind::Prep(side) => self.prep_secs(side),
-        }
+    /// Bank the live speech display value. Call whenever the speech
+    /// timer freezes or ticks.
+    pub fn bank_speech(&mut self, displayed: i32) {
+        self.speech_secs = displayed.max(0);
     }
 
     /// Start a fresh speech at `full_secs`, discarding the old speech
@@ -151,29 +102,28 @@ impl TimerBank {
     /// are untouched.
     pub fn start_speech(&mut self, full_secs: i32) -> i32 {
         self.speech_secs = full_secs.max(0);
-        self.active = TimerKind::Speech;
         self.speech_secs
     }
 
     /// Restore one team's prep balance to the full 3:00 — the only way a
-    /// prep balance ever goes back up. Returns the value the display
-    /// should show, given the live display value `displayed`: `PREP_SECS`
-    /// if that team's prep is currently on screen, else the untouched
-    /// active timer's value via `secs_for`. Callers displaying a timer
-    /// must use the returned value.
-    #[must_use]
-    pub fn reset_prep(&mut self, side: Side, displayed: i32) -> i32 {
+    /// prep balance ever goes back up. The speech display is never
+    /// touched here: callers keep showing the speech remainder.
+    pub fn reset_prep(&mut self, side: Side) {
         match side {
             Side::Pro => self.pro_prep_secs = PREP_SECS,
             Side::Con => self.con_prep_secs = PREP_SECS,
         }
-        if self.active == TimerKind::Prep(side) {
-            PREP_SECS
-        } else {
-            self.secs_for(self.active, displayed)
-        }
     }
 
+    /// Write one team's prep balance directly. The prep chip's own
+    /// countdown ticks this down while the speech timer stays on screen.
+    pub fn set_prep(&mut self, side: Side, secs: i32) {
+        let secs = secs.clamp(0, PREP_SECS);
+        match side {
+            Side::Pro => self.pro_prep_secs = secs,
+            Side::Con => self.con_prep_secs = secs,
+        }
+    }
     /// Restore both prep balances (round replacement only).
     pub fn reset_all_prep(&mut self) {
         self.pro_prep_secs = PREP_SECS;
@@ -234,91 +184,72 @@ mod tests {
     }
 
     #[test]
-    fn used_prep_resumes_remaining_after_a_speech() {
-        let mut bank = TimerBank::new(240);
-        // Enter Pro prep at the full 3:00, use 1:00, then go do a speech.
-        assert_eq!(bank.switch_to(TimerKind::Prep(Side::Pro)), PREP_SECS);
-        bank.bank_displayed(120);
-        assert_eq!(bank.switch_to(TimerKind::Speech), 240);
-        // Back to Pro prep: 2:00 left, not a fresh 3:00.
-        assert_eq!(bank.switch_to(TimerKind::Prep(Side::Pro)), 120);
+    fn used_prep_keeps_remaining_while_speech_ticks() {
+        let mut bank = TimerBank::restored(240, PREP_SECS, PREP_SECS);
+        // Burn 1:00 of Pro prep, then tick the speech timer: both
+        // balances coexist, prep is not a display mode anymore.
+        bank.set_prep(Side::Pro, 120);
+        bank.bank_speech(90);
+        assert_eq!(bank.prep_secs(Side::Pro), 120);
+        assert_eq!(bank.speech_secs(), 90);
     }
 
     #[test]
     fn pro_and_con_prep_balances_are_independent() {
-        let mut bank = TimerBank::new(240);
-        bank.switch_to(TimerKind::Prep(Side::Pro));
-        bank.bank_displayed(100);
-        assert_eq!(bank.switch_to(TimerKind::Prep(Side::Con)), PREP_SECS);
-        bank.bank_displayed(45);
-        assert_eq!(bank.switch_to(TimerKind::Prep(Side::Pro)), 100);
+        let mut bank = TimerBank::restored(240, PREP_SECS, PREP_SECS);
+        bank.set_prep(Side::Pro, 100);
+        bank.set_prep(Side::Con, 45);
+        assert_eq!(bank.prep_secs(Side::Pro), 100);
         assert_eq!(bank.prep_secs(Side::Con), 45);
     }
 
     #[test]
-    fn speech_remainder_survives_a_prep_detour() {
-        let mut bank = TimerBank::new(240);
-        bank.bank_displayed(90); // speech paused with 1:30 left
-        bank.switch_to(TimerKind::Prep(Side::Con));
-        bank.bank_displayed(150);
-        assert_eq!(bank.switch_to(TimerKind::Speech), 90);
+    fn prep_reset_is_per_team_and_never_touches_speech() {
+        let mut bank = TimerBank::restored(240, PREP_SECS, PREP_SECS);
+        bank.set_prep(Side::Pro, 100);
+        bank.bank_speech(50);
+        bank.reset_prep(Side::Pro);
+        assert_eq!(bank.prep_secs(Side::Pro), PREP_SECS);
+        assert_eq!(
+            bank.prep_secs(Side::Con),
+            PREP_SECS,
+            "Con balance must not move"
+        );
+        assert_eq!(bank.speech_secs(), 50);
     }
 
     #[test]
-    fn prep_reset_is_per_team_and_only_via_reset_prep() {
-        let mut bank = TimerBank::new(240);
-        bank.switch_to(TimerKind::Prep(Side::Pro));
-        bank.bank_displayed(100);
-        bank.switch_to(TimerKind::Prep(Side::Con));
-        bank.bank_displayed(50);
-        // Con prep is on screen at 50: resetting Pro leaves the display alone.
-        assert_eq!(bank.reset_prep(Side::Pro, 50), 50);
+    fn resetting_prep_leaves_speech_balance_alone() {
+        let mut bank = TimerBank::restored(240, PREP_SECS, PREP_SECS);
+        bank.bank_speech(42);
+        bank.reset_prep(Side::Pro);
         assert_eq!(bank.prep_secs(Side::Pro), PREP_SECS);
-        assert_eq!(bank.prep_secs(Side::Con), 50, "Con balance must not move");
-        // Merely re-entering a used prep timer never tops it up.
-        assert_eq!(bank.switch_to(TimerKind::Prep(Side::Con)), 50);
-    }
-
-    #[test]
-    fn resetting_on_screen_prep_returns_full_prep_for_display() {
-        let mut bank = TimerBank::new(240);
-        bank.switch_to(TimerKind::Prep(Side::Pro));
-        bank.bank_displayed(42);
-        // Pro prep is on screen at 42: caller must show the refill.
-        assert_eq!(bank.reset_prep(Side::Pro, 42), PREP_SECS);
-        assert_eq!(bank.prep_secs(Side::Pro), PREP_SECS);
+        assert_eq!(bank.speech_secs(), 42);
     }
 
     #[test]
     fn expired_prep_stays_at_zero_until_explicitly_reset() {
-        let mut bank = TimerBank::new(240);
-        bank.switch_to(TimerKind::Prep(Side::Pro));
-        bank.bank_displayed(0);
-        bank.switch_to(TimerKind::Speech);
-        assert_eq!(bank.switch_to(TimerKind::Prep(Side::Pro)), 0);
-        // Pro prep is back on screen at 0: display must show the refill.
-        assert_eq!(bank.reset_prep(Side::Pro, 0), PREP_SECS);
-        assert_eq!(bank.switch_to(TimerKind::Prep(Side::Pro)), PREP_SECS);
+        let mut bank = TimerBank::restored(240, PREP_SECS, PREP_SECS);
+        bank.set_prep(Side::Pro, 0);
+        bank.bank_speech(90);
+        assert_eq!(bank.prep_secs(Side::Pro), 0);
+        bank.reset_prep(Side::Pro);
+        assert_eq!(bank.prep_secs(Side::Pro), PREP_SECS);
     }
 
     #[test]
     fn new_speech_discards_speech_remainder_but_keeps_prep() {
-        let mut bank = TimerBank::new(240);
-        bank.switch_to(TimerKind::Prep(Side::Pro));
-        bank.bank_displayed(111);
+        let mut bank = TimerBank::restored(240, PREP_SECS, PREP_SECS);
+        bank.set_prep(Side::Pro, 111);
         assert_eq!(bank.start_speech(180), 180);
-        assert_eq!(bank.active(), TimerKind::Speech);
         assert_eq!(bank.prep_secs(Side::Pro), 111);
     }
 
     #[test]
     fn banked_values_are_clamped_to_sane_ranges() {
-        let mut bank = TimerBank::new(-5);
-        assert_eq!(bank.secs_for(TimerKind::Speech, -5), 0);
-        bank.switch_to(TimerKind::Prep(Side::Pro));
-        bank.bank_displayed(999);
+        let bank = TimerBank::restored(-5, 999, -3);
+        assert_eq!(bank.speech_secs(), 0);
         assert_eq!(bank.prep_secs(Side::Pro), PREP_SECS);
-        bank.bank_displayed(-3);
-        assert_eq!(bank.prep_secs(Side::Pro), 0);
+        assert_eq!(bank.prep_secs(Side::Con), 0);
     }
 }
