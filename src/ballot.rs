@@ -73,18 +73,16 @@ pub(crate) struct BallotProps {
     pub(crate) openrouter_key: RwSignal<Option<ApiKey>>,
 }
 
-fn ai_summary_block(
+fn ai_summary_button(
     state: RoundState,
     openrouter_key: RwSignal<Option<ApiKey>>,
-    copy_feedback: RwSignal<Option<&'static str>>,
+    ai_summary: RwSignal<Option<String>>,
+    ai_busy: RwSignal<bool>,
+    ai_error: RwSignal<Option<String>>,
 ) -> impl IntoView {
-    let ai_summary = RwSignal::new(None::<String>);
-    let ai_busy = RwSignal::new(false);
-    let ai_error = RwSignal::new(None::<String>);
-    let st_click = state.clone();
+    let st_click = state;
     view! {
-        <div class="ai-summary no-print">
-            <button class="btn btn-main" disabled=move || ai_busy.get() || openrouter_key.get().is_none()
+            <button class="btn btn-main" aria-describedby="ai-summary-note" disabled=move || ai_busy.get() || openrouter_key.get().is_none()
                 on:click=move |_| {
                     let Some(key) = openrouter_key.get_untracked() else { return };
                     let round = st_click.snapshot();
@@ -100,10 +98,22 @@ fn ai_summary_block(
                 }>
                 {move || if ai_busy.get() { "✨ Asking OpenRouter…" } else { "✨ AI summary of this round" }}
             </button>
+    }
+}
+
+fn ai_summary_output(
+    state: RoundState,
+    openrouter_key: RwSignal<Option<ApiKey>>,
+    copy_feedback: RwSignal<Option<&'static str>>,
+    ai_summary: RwSignal<Option<String>>,
+    ai_error: RwSignal<Option<String>>,
+) -> impl IntoView {
+    view! {
+        <div class="ai-summary no-print">
             {move || if openrouter_key.get().is_none() {
-                view! { <span class="ai-hint">"Connect to OpenRouter (top of page) first — it uses your own account."</span> }.into_any()
+                view! { <span class="ai-hint" id="ai-summary-note">"Connect to OpenRouter (top of page) first — it uses your own account."</span> }.into_any()
             } else {
-                view! { <span class="ai-hint">"Sends this flow to OpenRouter — nothing is sent until you tap."</span> }.into_any()
+                view! { <span class="ai-hint" id="ai-summary-note">"Sends this flow to OpenRouter — nothing is sent until you tap."</span> }.into_any()
             }}
             {move || ai_error.get().map(|e| view! { <p class="ai-error" role="alert">{format!("⚠️ {e}")}</p> })}
             {move || ai_summary.get().map(|text| {
@@ -138,6 +148,9 @@ pub(crate) fn ballot_card(props: BallotProps) -> impl IntoView {
         openrouter_key,
     } = props;
     let st_export = state.clone();
+    let ai_summary = RwSignal::new(None::<String>);
+    let ai_busy = RwSignal::new(false);
+    let ai_error = RwSignal::new(None::<String>);
     view! {
             <section class="card ballot-card">
                 <h2>"3 · Your decision" </h2>
@@ -168,7 +181,6 @@ pub(crate) fn ballot_card(props: BallotProps) -> impl IntoView {
                         on:input={let s = state.clone(); move |ev| { s.rfd.set(event_target_value(&ev)); save(&s); }}></textarea>
                     <div class="notes-print" aria-hidden="true">{move || state.rfd.get()}</div>
                 </label>
-                {ai_summary_block(state.clone(), openrouter_key, copy_feedback)}
                 <div class="ballot-actions no-print">
                     <button class="btn btn-main" on:click=move |_| {
                         let text = decision_text(&st_export);
@@ -182,7 +194,9 @@ pub(crate) fn ballot_card(props: BallotProps) -> impl IntoView {
                     }>"📋 Copy decision summary"</button>
                     <span class="copy-feedback" role="status" aria-live="polite">{move || copy_feedback.get().unwrap_or("")}</span>
                     <button class="btn btn-soft" on:click=move |_| print_page()>"🖨️ Print flow + ballot"</button>
+                    {ai_summary_button(state.clone(), openrouter_key, ai_summary, ai_busy, ai_error)}
                 </div>
+                {ai_summary_output(state.clone(), openrouter_key, copy_feedback, ai_summary, ai_error)}
             </section>
     }
 }
