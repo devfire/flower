@@ -136,7 +136,7 @@ where
                                 {move || timer_announcement.get()}
                             </div>
                             <div class="timer-btns">
-                                <button class="btn btn-main" on:click=toggle_timer>
+                                <button class="btn btn-main timer-toggle" on:click=toggle_timer>
                                     {move || if running.get() { "⏸ Pause" } else { "▶ Start" }}
                                 </button>
                                 <button class="btn btn-soft" on:click=reset_speech>"↺ Reset"</button>

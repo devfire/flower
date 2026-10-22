@@ -151,6 +151,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .timer-btns, .step-nav { display: flex; gap: 6px 6px; align-items: center; flex-wrap: wrap; }
 .timer-btns { justify-content: flex-end; }
 .timer-box .btn { padding: 5px 14px; }
+.timer-box .timer-toggle { min-width: 6.5rem; text-align: center; }
 /* Prep: title on its own line, then Pro and Con as two equal columns; each
    column is a chip that grows plus a fixed round reset button. */
 .prep-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
