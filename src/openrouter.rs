@@ -140,7 +140,9 @@ pub fn auth_url(callback_url: &str, challenge: &str, state: &str) -> String {
 fn random_bytes<const N: usize>() -> Result<[u8; N], String> {
     let window = web_sys::window().ok_or("no browser window")?;
     let mut buf = [0u8; N];
-    let crypto = window.crypto().map_err(|_| "browser refused crypto".to_owned())?;
+    let crypto = window
+        .crypto()
+        .map_err(|_| "browser refused crypto".to_owned())?;
     crypto
         .get_random_values_with_u8_array(&mut buf)
         .map_err(|_| "browser refused to generate random values".to_owned())?;
@@ -182,8 +184,12 @@ pub async fn begin_connect() -> Result<(), String> {
     let location = window.location();
     let callback_url = format!(
         "{}{}",
-        location.origin().map_err(|_| "page URL unavailable".to_owned())?,
-        location.pathname().map_err(|_| "page URL unavailable".to_owned())?,
+        location
+            .origin()
+            .map_err(|_| "page URL unavailable".to_owned())?,
+        location
+            .pathname()
+            .map_err(|_| "page URL unavailable".to_owned())?,
     );
     location
         .set_href(&auth_url(&callback_url, &challenge, &state))
@@ -200,7 +206,9 @@ pub async fn begin_connect() -> Result<(), String> {
 pub async fn handle_callback() -> Result<Option<ApiKey>, String> {
     let window = web_sys::window().ok_or("no browser window")?;
     let location = window.location();
-    let search = location.search().map_err(|_| "page URL unavailable".to_owned())?;
+    let search = location
+        .search()
+        .map_err(|_| "page URL unavailable".to_owned())?;
     let params = web_sys::UrlSearchParams::new_with_str(&search)
         .map_err(|_| "page URL unavailable".to_owned())?;
     let Some(code) = params.get("code") else {
@@ -212,14 +220,21 @@ pub async fn handle_callback() -> Result<Option<ApiKey>, String> {
     disconnect();
     let clean = format!(
         "{}{}",
-        location.pathname().map_err(|_| "page URL unavailable".to_owned())?,
-        location.hash().map_err(|_| "page URL unavailable".to_owned())?,
+        location
+            .pathname()
+            .map_err(|_| "page URL unavailable".to_owned())?,
+        location
+            .hash()
+            .map_err(|_| "page URL unavailable".to_owned())?,
     );
     if let Ok(history) = window.history() {
         let _ = history.replace_state_with_url(&JsValue::NULL, "", Some(&clean));
     }
     if params.get("state") != expected_state || expected_state.is_none() {
-        return Err("OpenRouter sign-in didn't match the attempt started here — try connecting again.".to_owned());
+        return Err(
+            "OpenRouter sign-in didn't match the attempt started here — try connecting again."
+                .to_owned(),
+        );
     }
     let verifier = verifier.ok_or("sign-in attempt expired — try connecting again.")?;
     let body = serde_json::json!({
@@ -262,9 +277,14 @@ struct Message {
     content: Option<String>,
 }
 
-async fn post_json(url: &str, key: Option<&ApiKey>, body: &serde_json::Value) -> Result<String, String> {
+async fn post_json(
+    url: &str,
+    key: Option<&ApiKey>,
+    body: &serde_json::Value,
+) -> Result<String, String> {
     let window = web_sys::window().ok_or("no browser window")?;
-    let headers = web_sys::Headers::new().map_err(|_| "browser refused request headers".to_owned())?;
+    let headers =
+        web_sys::Headers::new().map_err(|_| "browser refused request headers".to_owned())?;
     headers
         .append("Content-Type", "application/json")
         .map_err(|_| "browser refused request headers".to_owned())?;
@@ -299,7 +319,10 @@ async fn post_json(url: &str, key: Option<&ApiKey>, body: &serde_json::Value) ->
         Ok(text)
     } else {
         Err(api_error(&text).unwrap_or_else(|| {
-            format!("OpenRouter said no (HTTP {}) — try again", response.status())
+            format!(
+                "OpenRouter said no (HTTP {}) — try again",
+                response.status()
+            )
         }))
     }
 }
@@ -313,7 +336,10 @@ fn api_error(body: &str) -> Option<String> {
     struct ErrorBody {
         message: Option<String>,
     }
-    let message = serde_json::from_str::<ErrorReply>(body).ok()?.error?.message?;
+    let message = serde_json::from_str::<ErrorReply>(body)
+        .ok()?
+        .error?
+        .message?;
     let message = message.trim();
     if message.is_empty() {
         None
@@ -329,7 +355,12 @@ fn api_error(body: &str) -> Option<String> {
 pub fn summary_prompt(round: &RoundData) -> String {
     let mut prompt = String::new();
     let _ = writeln!(prompt, "Topic: {}", round.topic.trim());
-    let _ = writeln!(prompt, "Pro team: {} · Con team: {}", round.pro_team.trim(), round.con_team.trim());
+    let _ = writeln!(
+        prompt,
+        "Pro team: {} · Con team: {}",
+        round.pro_team.trim(),
+        round.con_team.trim()
+    );
     for (rows, side) in [(&round.pro_rows, "Pro"), (&round.con_rows, "Con")] {
         let _ = writeln!(prompt, "\n{side} sheet (their arguments, top to bottom):");
         for row in rows {
@@ -339,7 +370,16 @@ pub fn summary_prompt(round: &RoundData) -> String {
                     let text = cell.text.trim();
                     if !text.is_empty() {
                         let mark = cell.mark.label();
-                        let _ = write!(cells, "\n  - {}: {text}{}", SPEECH_COLS[col].full, if mark.is_empty() { String::new() } else { format!(" [{mark}]") });
+                        let _ = write!(
+                            cells,
+                            "\n  - {}: {text}{}",
+                            SPEECH_COLS[col].full,
+                            if mark.is_empty() {
+                                String::new()
+                            } else {
+                                format!(" [{mark}]")
+                            }
+                        );
                     }
                 }
             }

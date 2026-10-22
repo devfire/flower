@@ -61,7 +61,10 @@ pub fn App() -> impl IntoView {
         match openrouter::handle_callback().await {
             Ok(Some(key)) => {
                 openrouter_key.set(Some(key));
-                openrouter_status.set(Some("✓ Connected to OpenRouter — the AI summary button is ready in section 3.".to_owned()));
+                openrouter_status.set(Some(
+                    "✓ Connected to OpenRouter — the AI summary button is ready in section 3."
+                        .to_owned(),
+                ));
             }
             Ok(None) => {}
             Err(e) => openrouter_status.set(Some(format!("⚠️ {e}"))),
