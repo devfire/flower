@@ -8,7 +8,7 @@
 //! demoted to plain text (escaped on output), and link/image targets
 //! are rewritten to `#` unless they are web or mail links.
 
-use pulldown_cmark::{Event, Options, Parser, Tag, html};
+use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd, html};
 
 fn is_safe_url(url: &str) -> bool {
     let url = url.trim();
@@ -19,14 +19,17 @@ fn is_safe_url(url: &str) -> bool {
         || url.starts_with('/')
 }
 
+fn markdown_options() -> Options {
+    Options::ENABLE_TABLES
+        | Options::ENABLE_STRIKETHROUGH
+        | Options::ENABLE_TASKLISTS
+        | Options::ENABLE_HEADING_ATTRIBUTES
+}
+
 /// Render Markdown to sanitised HTML for `inner_html`.
 #[must_use]
 pub fn render_markdown(source: &str) -> String {
-    let options = Options::ENABLE_TABLES
-        | Options::ENABLE_STRIKETHROUGH
-        | Options::ENABLE_TASKLISTS
-        | Options::ENABLE_HEADING_ATTRIBUTES;
-    let events = Parser::new_ext(source, options).map(|event| match event {
+    let events = Parser::new_ext(source, markdown_options()).map(|event| match event {
         Event::Html(html) | Event::InlineHtml(html) => Event::Text(html),
         Event::Start(Tag::Link {
             link_type,
@@ -55,6 +58,27 @@ pub fn render_markdown(source: &str) -> String {
     let mut out = String::with_capacity(source.len());
     html::push_html(&mut out, events);
     out
+}
+
+/// Reduce Markdown to plain text (no markup), for pasting into a plain
+/// textarea. List items become `- ` lines; blocks are separated by newlines.
+#[must_use]
+pub fn plain_text(source: &str) -> String {
+    let mut out = String::with_capacity(source.len());
+    for event in Parser::new_ext(source, markdown_options()) {
+        match event {
+            Event::Text(text) | Event::Code(text) | Event::Html(text) | Event::InlineHtml(text) => {
+                out.push_str(&text);
+            }
+            Event::SoftBreak | Event::HardBreak => out.push('\n'),
+            Event::Start(Tag::Item) => out.push_str("- "),
+            Event::End(TagEnd::Paragraph | TagEnd::Heading(_) | TagEnd::Item | TagEnd::CodeBlock) => {
+                out.push('\n');
+            }
+            _ => {}
+        }
+    }
+    out.trim().to_string()
 }
 
 #[cfg(test)]
@@ -87,5 +111,16 @@ mod tests {
         assert!(html.contains("href=\"https://example.com\""), "{html}");
         assert!(!html.contains("javascript:"), "{html}");
         assert!(html.contains("href=\"#\""), "{html}");
+    }
+
+    #[test]
+    fn plain_text_strips_markup() {
+        let text = plain_text(
+            "## Verdict\n\nPro wins on **turns**, see [notes](https://x.test).\n\n- first\n- `second`",
+        );
+        assert_eq!(
+            text,
+            "Verdict\nPro wins on turns, see notes.\n- first\n- second"
+        );
     }
 }

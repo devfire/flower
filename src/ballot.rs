@@ -1,6 +1,6 @@
 //! Ballot helpers: dropped-argument hints for the decision section.
 
-use crate::markdown::render_markdown;
+use crate::markdown::{plain_text, render_markdown};
 use crate::model::{DroppedArgument, Side};
 use crate::openrouter::{self, ApiKey};
 use crate::shorthand::{InsertCtx, TextTarget};
@@ -131,7 +131,7 @@ fn ai_summary_output(
                                     copy_feedback.set(Some(if copy_text(&text).await { "Copied ✓" } else { "⚠️ Copy failed — clipboard blocked by the browser" }));
                                 });
                             }>"📋 Copy AI summary"</button>
-                            <button class="btn btn-soft" on:click=move |_| { s.rfd.set(for_rfd.clone()); save(&s); }>"Use as my reason for decision"</button>
+                            <button class="btn btn-soft" on:click=move |_| { s.rfd.set(plain_text(&for_rfd)); save(&s); }>"Use as my reason for decision"</button>
                         </div>
                     </div>
                 }
