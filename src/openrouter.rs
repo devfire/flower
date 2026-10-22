@@ -344,8 +344,8 @@ pub fn summary_prompt(round: &RoundData) -> String {
             }
         }
     }
-    if !round.crossfire_notes.trim().is_empty() {
-        let _ = writeln!(prompt, "\nNotes: {}", round.crossfire_notes.trim());
+    if !round.notes.trim().is_empty() {
+        let _ = writeln!(prompt, "\nNotes: {}", round.notes.trim());
     }
     let _ = writeln!(prompt, "\n{}", round.decision_text());
     prompt
@@ -426,7 +426,7 @@ mod tests {
     fn summary_prompt_lists_flow_in_speaking_order_with_marks() {
         let mut round = RoundData::sample();
         round.winner = Some(Side::Pro);
-        round.crossfire_notes = "Con conceded only 9% is recycled".to_owned();
+        round.notes = "Con conceded only 9% is recycled".to_owned();
         let prompt = summary_prompt(&round);
         assert!(prompt.contains("Resolved: The United States should ban single-use plastics."));
         assert!(prompt.contains("Pro sheet"));

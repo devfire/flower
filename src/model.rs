@@ -155,7 +155,7 @@ pub struct RoundData {
     pub speaking_order: SpeakingOrder,
     pub pro_rows: Vec<RowData>,
     pub con_rows: Vec<RowData>,
-    pub crossfire_notes: String,
+    pub notes: String,
     /// Ballot winner; `None` until the judge picks a side. Old saves
     /// stored `""`/`"Pro"`/`"Con"` (any other string was a phantom
     /// vote); `winner_serde` maps those onto this type on load and
@@ -178,7 +178,7 @@ impl Default for RoundData {
             speaking_order: SpeakingOrder::ProFirst,
             pro_rows: vec![RowData::new(1, ""), RowData::new(2, "")],
             con_rows: vec![RowData::new(3, ""), RowData::new(4, "")],
-            crossfire_notes: String::new(),
+            notes: String::new(),
             winner: None,
             rfd: String::new(),
             next_id: 5,
@@ -287,7 +287,7 @@ mod tests {
     fn missing_any_single_top_level_field_loads_with_rest_intact() {
         let mut sample = RoundData::sample();
         sample.rfd = "Pro wins on weighing".to_owned();
-        sample.crossfire_notes = "Con conceded 9%".to_owned();
+        sample.notes = "Con conceded 9%".to_owned();
         sample.winner = Some(Side::Pro);
         let fields = [
             "topic",
@@ -296,7 +296,7 @@ mod tests {
             "speaking_order",
             "pro_rows",
             "con_rows",
-            "crossfire_notes",
+            "notes",
             "winner",
             "rfd",
             "next_id",

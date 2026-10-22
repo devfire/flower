@@ -21,7 +21,7 @@ pub enum TextTarget {
     Topic,
     ProTeam,
     ConTeam,
-    CrossfireNotes,
+    Notes,
     Rfd,
 }
 
@@ -41,7 +41,7 @@ impl TextTarget {
             Self::Topic => "field-topic".to_string(),
             Self::ProTeam => "field-pro-team".to_string(),
             Self::ConTeam => "field-con-team".to_string(),
-            Self::CrossfireNotes => "notes-crossfire".to_string(),
+            Self::Notes => "field-notes".to_string(),
             Self::Rfd => "notes-rfd".to_string(),
         }
     }
@@ -64,7 +64,7 @@ impl TextTarget {
             Self::Topic => Some(state.topic),
             Self::ProTeam => Some(state.pro_team),
             Self::ConTeam => Some(state.con_team),
-            Self::CrossfireNotes => Some(state.crossfire_notes),
+            Self::Notes => Some(state.notes),
             Self::Rfd => Some(state.rfd),
         }
     }

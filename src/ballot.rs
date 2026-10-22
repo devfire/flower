@@ -40,7 +40,7 @@ fn dropped_hint(d: &DroppedArgument) -> String {
 #[component]
 pub(crate) fn DroppedHints(state: RoundState, step: RwSignal<usize>) -> impl IntoView {
     // Memo over only the real inputs (speaking order, row titles/cells,
-    // guide step): typing in the topic, crossfire, or RFD boxes never
+    // guide step): typing in the topic, notes, or RFD boxes never
     // re-derives hints, and the `Eq` hint list suppresses the downstream
     // DOM rebuild whenever the computed hints are unchanged.
     let hints = Memo::new(move |_| {

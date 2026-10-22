@@ -78,7 +78,7 @@ impl RoundData {
         blank(&self.topic)
             && blank(&self.pro_team)
             && blank(&self.con_team)
-            && blank(&self.crossfire_notes)
+            && blank(&self.notes)
             && self.winner.is_none()
             && blank(&self.rfd)
             && self.pro_rows.iter().all(row_blank)

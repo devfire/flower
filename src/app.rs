@@ -475,11 +475,11 @@ pub fn App() -> impl IntoView {
             // ---------- Notes ----------
             <section class="card notes-card">
                 <h2>"Notes" <span class="card-sub">"optional — only concessions & admissions"</span></h2>
-                <textarea class="big-notes" id="notes-crossfire" rows="3" aria-label="Notes" placeholder="e.g. “Pro agreed recycling is only 9% — that helps Con C1…”"
-                    on:focus=move |_| insert_ctx.focus(TextTarget::CrossfireNotes)
-                    prop:value=move || state.crossfire_notes.get()
-                    on:input={let s = state.clone(); move |ev| { s.crossfire_notes.set(event_target_value(&ev)); save(&s); }}></textarea>
-                <div class="notes-print" aria-hidden="true">{move || state.crossfire_notes.get()}</div>
+                <textarea class="big-notes" id="field-notes" rows="3" aria-label="Notes" placeholder="e.g. “Pro agreed recycling is only 9% — that helps Con C1…”"
+                    on:focus=move |_| insert_ctx.focus(TextTarget::Notes)
+                    prop:value=move || state.notes.get()
+                    on:input={let s = state.clone(); move |ev| { s.notes.set(event_target_value(&ev)); save(&s); }}></textarea>
+                <div class="notes-print" aria-hidden="true">{move || state.notes.get()}</div>
             </section>
 
             // ---------- Decision ----------

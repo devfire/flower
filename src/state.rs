@@ -81,7 +81,7 @@ pub struct RoundState {
     pub speaking_order: RwSignal<SpeakingOrder>,
     pub pro_rows: RwSignal<Vec<RowState>>,
     pub con_rows: RwSignal<Vec<RowState>>,
-    pub crossfire_notes: RwSignal<String>,
+    pub notes: RwSignal<String>,
     pub winner: RwSignal<Option<Side>>,
     pub rfd: RwSignal<String>,
     pub next_id: RwSignal<u32>,
@@ -112,7 +112,7 @@ impl RoundState {
             speaking_order,
             pro_rows,
             con_rows,
-            crossfire_notes,
+            notes,
             winner,
             rfd,
             next_id,
@@ -124,7 +124,7 @@ impl RoundState {
             speaking_order: RwSignal::new(speaking_order),
             pro_rows: RwSignal::new(pro_rows.iter().map(RowState::from_data).collect()),
             con_rows: RwSignal::new(con_rows.iter().map(RowState::from_data).collect()),
-            crossfire_notes: RwSignal::new(crossfire_notes),
+            notes: RwSignal::new(notes),
             winner: RwSignal::new(winner),
             rfd: RwSignal::new(rfd),
             next_id: RwSignal::new(next_id),
@@ -140,7 +140,7 @@ impl RoundState {
     /// Tracked dropped-argument derivation for the ballot hints: reads
     /// (subscribes the caller to) only the inputs `dropped_arguments`
     /// actually uses — speaking order and the row titles/cells — so
-    /// typing in the topic, team, crossfire, winner, or RFD fields never
+    /// typing in the topic, team, notes, winner, or RFD fields never
     /// re-derives hints. The other `RoundData` fields are inert defaults
     /// the derivation never reads; every field is named so a new field
     /// forces a decision here instead of silently defaulting.
@@ -152,7 +152,7 @@ impl RoundState {
             speaking_order: self.speaking_order.get(),
             pro_rows: read_rows(self.pro_rows, true),
             con_rows: read_rows(self.con_rows, true),
-            crossfire_notes: String::new(),
+            notes: String::new(),
             winner: None,
             rfd: String::new(),
             next_id: 0,
@@ -170,7 +170,7 @@ impl RoundState {
             speaking_order: read_signal(self.speaking_order, tracked),
             pro_rows: read_rows(self.pro_rows, tracked),
             con_rows: read_rows(self.con_rows, tracked),
-            crossfire_notes: read_signal(self.crossfire_notes, tracked),
+            notes: read_signal(self.notes, tracked),
             winner: read_signal(self.winner, tracked),
             rfd: read_signal(self.rfd, tracked),
             next_id: read_signal(self.next_id, tracked),
@@ -201,7 +201,7 @@ impl RoundState {
             speaking_order,
             pro_rows,
             con_rows,
-            crossfire_notes,
+            notes,
             winner,
             rfd,
             next_id,
@@ -214,7 +214,7 @@ impl RoundState {
         self.speaking_order.set(speaking_order.get_untracked());
         self.pro_rows.set(pro_rows.get_untracked());
         self.con_rows.set(con_rows.get_untracked());
-        self.crossfire_notes.set(crossfire_notes.get_untracked());
+        self.notes.set(notes.get_untracked());
         self.winner.set(winner.get_untracked());
         self.rfd.set(rfd.get_untracked());
         self.next_id.set(next_id.get_untracked());
@@ -253,7 +253,7 @@ mod tests {
             speaking_order: SpeakingOrder::ConFirst,
             pro_rows: vec![RowData::new(10, "Pro contention"), RowData::new(11, "")],
             con_rows: vec![RowData::new(20, "Con contention")],
-            crossfire_notes: "crossfire note".to_owned(),
+            notes: "a note".to_owned(),
             winner: Some(Side::Con),
             rfd: "Con wins on weighing".to_owned(),
             next_id: 99,
@@ -272,7 +272,7 @@ mod tests {
         assert_eq!(actual.pro_team, expected.pro_team);
         assert_eq!(actual.con_team, expected.con_team);
         assert_eq!(actual.speaking_order, expected.speaking_order);
-        assert_eq!(actual.crossfire_notes, expected.crossfire_notes);
+        assert_eq!(actual.notes, expected.notes);
         assert_eq!(actual.winner, expected.winner);
         assert_eq!(actual.rfd, expected.rfd);
         assert_eq!(actual.next_id, expected.next_id);
