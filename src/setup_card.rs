@@ -143,29 +143,33 @@ where
                             </div>
                         </div>
                         <div class="prep-row">
-                            <span>"Prep left (3m/team):"</span>
-                            <button class="btn btn-chip btn-pro" class:chip-on=move || prep_running.get() == Some(Side::Pro)
-                                aria-pressed=move || if prep_running.get() == Some(Side::Pro) { "true" } else { "false" }
-                                on:click=move |_| toggle_prep(Side::Pro)>
-                                {move || {
-                                    let action = if prep_running.get() == Some(Side::Pro) { "❚❚" } else { "▶" };
-                                    format!("Pro · {} · {action}", fmt_time(timer_bank.get().prep_secs(Side::Pro)))
-                                }}
-                            </button>
-                            <button class="btn btn-chip" title="Reset only Pro prep back to 3:00" aria-label="Reset only Pro prep back to 3:00" aria-haspopup="dialog"
-                                aria-expanded=move || if pending_confirm.get() == Some(PendingConfirm::ResetPrep(Side::Pro)) { "true" } else { "false" }
-                                on:click=move |_| pending_confirm.set(Some(PendingConfirm::ResetPrep(Side::Pro)))>"↺ "</button>
-                            <button class="btn btn-chip btn-con" class:chip-on=move || prep_running.get() == Some(Side::Con)
-                                aria-pressed=move || if prep_running.get() == Some(Side::Con) { "true" } else { "false" }
-                                on:click=move |_| toggle_prep(Side::Con)>
-                                {move || {
-                                    let action = if prep_running.get() == Some(Side::Con) { "❚❚" } else { "▶" };
-                                    format!("Con · {} · {action}", fmt_time(timer_bank.get().prep_secs(Side::Con)))
-                                }}
-                            </button>
-                            <button class="btn btn-chip" title="Reset only Con prep back to 3:00" aria-label="Reset only Con prep back to 3:00" aria-haspopup="dialog"
-                                aria-expanded=move || if pending_confirm.get() == Some(PendingConfirm::ResetPrep(Side::Con)) { "true" } else { "false" }
-                                on:click=move |_| pending_confirm.set(Some(PendingConfirm::ResetPrep(Side::Con)))>"↺"</button>
+                            <span class="prep-title">"Prep left " <span class="prep-sub">"(3m/team)"</span></span>
+                            <div class="prep-group">
+                                <button class="btn btn-chip btn-pro prep-main" class:chip-on=move || prep_running.get() == Some(Side::Pro)
+                                    aria-pressed=move || if prep_running.get() == Some(Side::Pro) { "true" } else { "false" }
+                                    on:click=move |_| toggle_prep(Side::Pro)>
+                                    {move || {
+                                        let action = if prep_running.get() == Some(Side::Pro) { "❚❚" } else { "▶" };
+                                        format!("Pro · {} · {action}", fmt_time(timer_bank.get().prep_secs(Side::Pro)))
+                                    }}
+                                </button>
+                                <button class="btn btn-chip prep-reset" title="Reset only Pro prep back to 3:00" aria-label="Reset only Pro prep back to 3:00" aria-haspopup="dialog"
+                                    aria-expanded=move || if pending_confirm.get() == Some(PendingConfirm::ResetPrep(Side::Pro)) { "true" } else { "false" }
+                                    on:click=move |_| pending_confirm.set(Some(PendingConfirm::ResetPrep(Side::Pro)))>"↺"</button>
+                            </div>
+                            <div class="prep-group">
+                                <button class="btn btn-chip btn-con prep-main" class:chip-on=move || prep_running.get() == Some(Side::Con)
+                                    aria-pressed=move || if prep_running.get() == Some(Side::Con) { "true" } else { "false" }
+                                    on:click=move |_| toggle_prep(Side::Con)>
+                                    {move || {
+                                        let action = if prep_running.get() == Some(Side::Con) { "❚❚" } else { "▶" };
+                                        format!("Con · {} · {action}", fmt_time(timer_bank.get().prep_secs(Side::Con)))
+                                    }}
+                                </button>
+                                <button class="btn btn-chip prep-reset" title="Reset only Con prep back to 3:00" aria-label="Reset only Con prep back to 3:00" aria-haspopup="dialog"
+                                    aria-expanded=move || if pending_confirm.get() == Some(PendingConfirm::ResetPrep(Side::Con)) { "true" } else { "false" }
+                                    on:click=move |_| pending_confirm.set(Some(PendingConfirm::ResetPrep(Side::Con)))>"↺"</button>
+                            </div>
                         </div>
                         <div class="step-nav">
                             <button class="btn btn-soft" disabled={move || step.get() == 0}

@@ -148,10 +148,17 @@ button, input, textarea { font: inherit; color: inherit; }
 .timer-label { font-weight: 800; color: #6b5410; font-size: .9rem; }
 .timer-digits { font-size: 1.9rem; font-weight: 700; line-height: 1; color: #6b5410; }
 .timer-digits.timer-done { color: #b3261e; animation: bob 1s ease-in-out infinite; }
-.timer-btns, .prep-row, .step-nav { display: flex; gap: 6px 6px; align-items: center; flex-wrap: wrap; }
-.prep-row > span:first-child { flex: 1 1 100%; }
+.timer-btns, .step-nav { display: flex; gap: 6px 6px; align-items: center; flex-wrap: wrap; }
 .timer-btns { justify-content: flex-end; }
-.timer-box .btn { padding: 5px 12px; }
+.timer-box .btn { padding: 5px 14px; }
+/* Prep: title on its own line, then Pro and Con as two equal columns; each
+   column is a chip that grows plus a fixed round reset button. */
+.prep-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
+.prep-title { grid-column: 1 / -1; font-size: .78rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #6b5410; }
+.prep-sub { text-transform: none; letter-spacing: 0; font-weight: 700; opacity: .8; }
+.prep-group { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.timer-box .prep-main { flex: 1 1 auto; min-width: 0; white-space: nowrap; text-align: center; padding: 6px 10px; font-variant-numeric: tabular-nums; }
+.timer-box .prep-reset { flex: none; width: 2rem; height: 2rem; padding: 0; display: grid; place-items: center; line-height: 1; }
 /* A prep chip ticking its own countdown: same raised affordance as other
    active toggles (order buttons), so "running" reads without new color. */
 .btn-chip.chip-on { outline: 3px solid var(--sky); box-shadow: 0 6px 14px rgba(74,63,85,.14); }
