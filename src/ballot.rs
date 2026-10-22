@@ -82,7 +82,7 @@ fn ai_summary_button(
 ) -> impl IntoView {
     let st_click = state;
     view! {
-            <button class="btn btn-main" aria-describedby="ai-summary-note" disabled=move || ai_busy.get() || openrouter_key.get().is_none()
+            <button class="btn btn-soft" aria-describedby="ai-summary-note" disabled=move || ai_busy.get() || openrouter_key.get().is_none()
                 on:click=move |_| {
                     let Some(key) = openrouter_key.get_untracked() else { return };
                     let round = st_click.snapshot();
@@ -182,7 +182,7 @@ pub(crate) fn ballot_card(props: BallotProps) -> impl IntoView {
                     <div class="notes-print" aria-hidden="true">{move || state.rfd.get()}</div>
                 </label>
                 <div class="ballot-actions no-print">
-                    <button class="btn btn-main" on:click=move |_| {
+                    <button class="btn btn-soft" on:click=move |_| {
                         let text = decision_text(&st_export);
                         spawn_local(async move {
                             copy_feedback.set(Some(if copy_text(&text).await {
