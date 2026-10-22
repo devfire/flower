@@ -221,9 +221,13 @@ button.fh-click { border: 2px solid transparent; cursor: pointer; text-align: le
 .fr-title input { flex: 1; min-width: 0; font-family: "Fredoka", sans-serif; font-weight: 600; }
 .sheet-pro .fr-title input { background: #edf6fd; }
 .sheet-con .fr-title input { background: #f2fbf6; }
-.row-del { border: none; background: transparent; color: var(--muted); cursor: pointer; font-weight: 800; padding: 10px 2px; }
-.row-del:hover { color: #b3261e; }
-.row-del-armed { color: #b3261e; }
+.row-del {
+  width: 24px; height: 24px; padding: 0; border-radius: 50%; cursor: pointer;
+  border: 2px solid #b3261e; background: #fde8e8; color: #b3261e;
+  font-size: 1.1rem; font-weight: 900; line-height: 1; display: grid; place-items: center;
+}
+.row-del:hover, .row-del-armed { background: #b3261e; color: #fff; }
+.row-del-wrap { align-self: start; margin: 10px 0 0 6px; }
 /* Anchored bubble: hangs off the ✕ itself instead of a browser dialog
    appearing at some unrelated corner of the window. */
 .row-del-wrap { position: relative; flex: none; }

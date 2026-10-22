@@ -35,7 +35,7 @@ pub(crate) fn FlowSheet(
     view! {
         <div class=sheet_class>
             <div class="flow-scroll">
-                <div class="flow-grid" style=format!("grid-template-columns: minmax(8rem, 11rem) repeat({}, minmax(6.5rem, 1fr));", SPEECH_COLS.len())>
+                <div class="flow-grid" style=format!("grid-template-columns: minmax(8rem, 11rem) repeat({}, minmax(6.5rem, 1fr)) auto;", SPEECH_COLS.len())>
                     <div class="fh fh-corner" style="grid-column: 1; grid-row: 1;">
                         {format!("{} arguments ↓", side.label())}
                         <span class="fh-sub">"one row = one argument"</span>
@@ -125,7 +125,8 @@ fn FlowRow(
                 prop:value=move || row.title.get()
                 on:input={let s = state.clone(); let r = row.clone(); move |ev| { r.title.set(event_target_value(&ev)); save(&s); }} />
             <div class="title-print" aria-hidden="true">{move || row.title.get()}</div>
-            <div class="row-del-wrap no-print"
+        </div>
+        <div class="row-del-wrap no-print" style=format!("grid-column: {}; grid-row: {};", SPEECH_COLS.len() + 2, row_index + 1)
                 on:keydown=move |ev| {
                     if ev.key() == "Escape" { confirming_delete.set(false); }
                 }>
@@ -134,7 +135,7 @@ fn FlowRow(
                     aria-expanded=move || if confirming_delete.get() { "true" } else { "false" }
                     on:click=move |_| {
                         confirming_delete.update(|armed| *armed = !*armed);
-                    }>"✕"</button>
+                    }>"−"</button>
                 {{let state = state.clone(); move || confirming_delete.get().then(|| {
                     let s = state.clone();
                     view! {
@@ -152,7 +153,6 @@ fn FlowRow(
                         </div>
                     }
                 })}}
-            </div>
         </div>
         {let r = row.clone(); (0..SPEECH_COLS.len()).map(|col| {
             let cell = r.cells[col];
