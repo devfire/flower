@@ -12,7 +12,8 @@ lay judges who want to flow but don't really know how yet. Based on the NSDA
 - 🎯 **Focus mode** dims speeches that aren't happening right now
 - ✂️ Tap-to-insert **shorthand cheat sheet**, crossfire notes, guided decision ballot
 - 🎀 **Resolution pre-filled** with the current NSDA Public Forum topic (extracted at build time into `topics.json`; a saved/typed topic is never overwritten — a newer NSDA wording is only offered, and the bundled fallback works offline)
-- 💾 Auto-saves in your browser (localStorage) — nothing leaves your device
+- 💾 Auto-saves in your browser (localStorage) — nothing leaves your device unless you request an AI summary
+- ✨ Optional **AI round summary**: "Connect to OpenRouter" (top of page) signs you in with your own OpenRouter account (OAuth PKCE); the key stays in `sessionStorage` for that tab only, and section 3 can then summarize the round on a free model under your account
 - 🖨️ Print / save-PDF prints both sheets + the ballot, like the two paper pages
 
 ## Run it locally
@@ -35,7 +36,7 @@ Release build: `trunk build --release` → static files in `dist/`.
 4. Your site appears at `https://<user>.github.io/<repo>/`. The relative `--public-url ./`
    also works for user pages and custom domains — no path edits needed.
 
-No server, database, or API keys: it's a fully static WASM site.
+No server or database: it's a fully static WASM site. The only API key is the optional OpenRouter key each judge mints for themselves in the browser — the app has no key of its own.
 
 ## Project layout
 
@@ -46,6 +47,7 @@ No server, database, or API keys: it's a fully static WASM site.
 | `src/state.rs` | Per-cell reactive signals, localStorage snapshot save/load |
 | `src/app.rs` | All UI: hero, guide + timers, flow sheets, ballot |
 | `src/topic.rs` | NSDA resolution: bundled fallback, same-origin `topics.json` fetch, pre-fill/offer decision |
+| `src/openrouter.rs` | OpenRouter OAuth PKCE connect/callback, session-only key, AI summary prompt + call |
 | `src/timer.rs` | Speech/prep timer bank (`TimerBank`, `PREP_SECS`, `fmt_time`) |
 | `src/progress.rs` | Round-progress persistence (guide step, timers, prep balances) |
 | `src/shorthand.rs` | Shorthand-chip insertion into flow cells / crossfire notes |

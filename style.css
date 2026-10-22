@@ -55,6 +55,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .hero-sub { font-size: 1.05rem; color: var(--muted); font-weight: 600; }
 .hero-tag { margin: 6px 0 0; font-size: 1.02rem; line-height: 1.5; }
 .hero-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.or-status { flex-basis: 100%; margin: 4px 0 0; font-weight: 700; font-size: .9rem; }
 
 /* ---------- cards & buttons ---------- */
 .card {
@@ -307,6 +308,11 @@ button.fh-click { border: 2px solid transparent; cursor: pointer; text-align: le
 .winner-print { display: none; font-family: "Fredoka", sans-serif; font-size: 1.2rem; }
 .ballot-actions { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; align-items: center; }
 .copy-feedback { font-weight: 700; }
+.ai-summary { margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.ai-hint { font-size: .85rem; color: var(--muted); font-weight: 700; }
+.ai-error { flex-basis: 100%; margin: 0; font-weight: 700; color: var(--error, #b3261e); }
+.ai-summary-box { flex-basis: 100%; background: #f0f8ff; border: 2px solid var(--blue); border-radius: 16px; padding: 14px 18px; }
+.ai-summary-body { margin: 0; white-space: pre-wrap; line-height: 1.55; font-family: "Nunito", sans-serif; }
 .footer { text-align: center; color: var(--muted); line-height: 1.6; padding: 0 12px; font-weight: 600; }
 .footer-small { font-size: .82rem; }
 

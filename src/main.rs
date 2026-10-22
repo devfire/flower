@@ -8,6 +8,7 @@ mod flow_sheet;
 mod guide;
 mod hero;
 mod model;
+mod openrouter;
 mod persistence;
 mod platform;
 mod progress;

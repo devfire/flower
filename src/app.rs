@@ -3,6 +3,7 @@ use crate::confirm::{PendingConfirm, confirm_dialog};
 use crate::flow_sheet::FlowSheet;
 use crate::hero::{HeroProps, hero_header};
 use crate::model::{RoundData, SHORTHAND, Side, SpeakingOrder, sheet_for};
+use crate::openrouter;
 use crate::progress::RoundProgress;
 use crate::setup_card::{SetupProps, setup_card};
 use crate::shorthand::{InsertCtx, TextTarget, insert_shorthand};
@@ -51,6 +52,21 @@ pub fn App() -> impl IntoView {
     // The NSDA topic currently on offer: starts as the bundled fallback
     // (so provenance works offline), replaced by the same-origin
     // `topics.json` the deploy build extracted when that fetch succeeds.
+    // OpenRouter (PKCE): a key minted in a previous authorize this tab,
+    // plus any `?code=` callback landing on this load. The key stays in
+    // sessionStorage — never in the round save.
+    let openrouter_key = RwSignal::new(openrouter::load_key());
+    let openrouter_status = RwSignal::new(None::<String>);
+    spawn_local(async move {
+        match openrouter::handle_callback().await {
+            Ok(Some(key)) => {
+                openrouter_key.set(Some(key));
+                openrouter_status.set(Some("✓ Connected to OpenRouter — the AI summary button is ready in section 3.".to_owned()));
+            }
+            Ok(None) => {}
+            Err(e) => openrouter_status.set(Some(format!("⚠️ {e}"))),
+        }
+    });
     let nsda_topic = RwSignal::new(bundled_topic.clone());
     {
         let state_for_fetch = state.clone();
@@ -344,6 +360,8 @@ pub fn App() -> impl IntoView {
                 state: state.clone(),
                 pending_confirm,
                 reset_round_walk,
+                openrouter_key,
+                openrouter_status,
             })}
             {confirm_dialog(pending_confirm, keep_confirm_button, app_owner, confirm_action)}
             {move || st_notice.recovery_notice.get().map(|notice| {
@@ -470,11 +488,12 @@ pub fn App() -> impl IntoView {
                 step,
                 insert_ctx,
                 copy_feedback,
+                openrouter_key,
             })}
             </main>
 
             <footer class="footer">
-                <p class="footer-small">"Your flow auto-saves only in this browser (localStorage) — nothing leaves your device."</p>
+                <p class="footer-small">"Your flow auto-saves only in this browser (localStorage) — nothing leaves your device unless you tap the AI summary button, which sends the flow to OpenRouter under your own account."</p>
             </footer>
         </div>
     }
