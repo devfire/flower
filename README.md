@@ -47,11 +47,12 @@ No server or database: it's a fully static WASM site. The only API key is the op
 | `src/state.rs` | Per-cell reactive signals, localStorage snapshot save/load |
 | `src/app.rs` | All UI: hero, guide + timers, flow sheets, ballot |
 | `src/topic.rs` | NSDA resolution: bundled fallback, same-origin `topics.json` fetch, pre-fill/offer decision |
-| `src/openrouter.rs` | OpenRouter OAuth PKCE connect/callback, session-only key, AI summary prompt + call |
+| `src/openrouter.rs` | OpenRouter OAuth PKCE connect/callback, session-only key, AI summary call |
 | `src/timer.rs` | Speech/prep timer bank (`TimerBank`, `PREP_SECS`, `fmt_time`) |
 | `src/progress.rs` | Round-progress persistence (guide step, timers, prep balances) |
 | `src/shorthand.rs` | Shorthand-chip insertion into flow cells / notes |
 | `topics.json` | Last bundled NSDA PF resolution (fallback; refreshed at deploy time) |
+| `prompts/summary_system.md`, `prompts/summary_user.md` | AI summary prompts (bundled via `include_str!`; `{round}` in the user prompt is replaced with the flow text — edit these files to change the wording) |
 | `scripts/fetch_nsda_topic.py` | Build-time NSDA topics-page extraction (+ offline tests in `scripts/test_fetch_nsda_topic.py`) |
 | `style.css` | Kawaii pastel theme, responsive + print styles |
 | `index.html` | Trunk entry page |

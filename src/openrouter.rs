@@ -23,6 +23,12 @@ const CHAT_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
 /// Free-tier routing model: a connected account is still required (it
 /// owns the key), but summaries cost the judge nothing.
 const SUMMARY_MODEL: &str = "openrouter/free";
+/// AI summary prompts, externalized to `prompts/` for easy editing;
+/// bundled at compile time (same pattern as `topics.json`). Edit those
+/// files — not Rust — to change the wording. `{round}` in the user
+/// prompt is replaced with the flow text from `summary_prompt`.
+const SUMMARY_SYSTEM_PROMPT: &str = include_str!("../prompts/summary_system.md");
+const SUMMARY_USER_PROMPT: &str = include_str!("../prompts/summary_user.md");
 
 const KEY_STORAGE: &str = "flower-openrouter-key";
 const VERIFIER_STORAGE: &str = "flower-openrouter-verifier";
@@ -351,6 +357,15 @@ pub fn summary_prompt(round: &RoundData) -> String {
     prompt
 }
 
+/// The user prompt from `prompts/summary_user.md` with `{round}`
+/// replaced by the flow text. Extracted so tests can prove the
+/// placeholder survives edits to the prompt file.
+fn summary_user_prompt(round: &RoundData) -> String {
+    SUMMARY_USER_PROMPT
+        .trim()
+        .replace("{round}", &summary_prompt(round))
+}
+
 /// Ask the connected account's `OpenRouter` for a plain-language summary
 /// of the round: what was argued, what clashed, what was dropped or
 /// extended, and how the weighing went.
@@ -361,8 +376,8 @@ pub async fn summarize(key: &ApiKey, round: &RoundData) -> Result<String, String
     let body = serde_json::json!({
         "model": SUMMARY_MODEL,
         "messages": [
-            {"role": "system", "content": "You summarize Public Forum debate rounds for a volunteer judge, from their shorthand flow notes. Notes are terse and may use symbols (→ leads to, ↑/↓ increase/decrease, 💤 dropped = never answered, ➜ extended = carried forward, ⭐ key argument). Use ONLY what the notes say — never invent arguments, evidence, or a winner the notes don't support. Write plain, warm, concrete language a new judge can read aloud to debaters."},
-            {"role": "user", "content": format!("Summarize this debate round in about 200 words under three short headings: \"What each side argued\", \"Where they clashed\", \"What decided it (dropped/extended arguments and weighing)\". If the flow is too sparse to tell, say so honestly.\n\n{}", summary_prompt(round))},
+            {"role": "system", "content": SUMMARY_SYSTEM_PROMPT.trim()},
+            {"role": "user", "content": summary_user_prompt(round)},
         ],
     });
     let text = post_json(CHAT_URL, Some(key), &body).await?;
@@ -438,5 +453,14 @@ mod tests {
         assert!(!prompt.contains("Crossfire notes"));
         // Sparse flow: empty default round yields no Argument lines.
         assert!(!summary_prompt(&RoundData::default()).contains("Argument:"));
+    }
+
+    #[test]
+    fn external_prompts_render_with_round_flow() {
+        assert!(!SUMMARY_SYSTEM_PROMPT.trim().is_empty());
+        let rendered = summary_user_prompt(&RoundData::sample());
+        assert!(rendered.contains("What each side argued"));
+        assert!(rendered.contains("Pro sheet"));
+        assert!(!rendered.contains("{round}"));
     }
 }
