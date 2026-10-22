@@ -85,6 +85,9 @@ pub struct RoundState {
     pub winner: RwSignal<Option<Side>>,
     pub rfd: RwSignal<String>,
     pub next_id: RwSignal<u32>,
+    /// Row whose delete confirmation is open. One slot, so opening a
+    /// second confirmation closes the first.
+    pub deleting_row: RwSignal<Option<(Side, u32)>>,
     /// True after the last `save` failed (storage full/blocked/unavailable),
     /// so the UI can stop claiming the round is saved.
     pub save_failed: RwSignal<bool>,
@@ -129,6 +132,7 @@ impl RoundState {
             rfd: RwSignal::new(rfd),
             next_id: RwSignal::new(next_id),
             save_failed: RwSignal::new(false),
+            deleting_row: RwSignal::new(None),
             recovery_notice: RwSignal::new(None),
         }
     }
@@ -188,12 +192,13 @@ impl RoundState {
         // An explicit replace (example / new round) is the judge choosing to
         // discard the unreadable save, so it lifts the overwrite block.
         self.recovery_notice.set(None);
+        self.deleting_row.set(None);
         let fresh = Self::from_data(data);
         // Exhaustive destructure: a new `RoundState` field is a compile
         // error here until it is copied (or deliberately not copied).
         // `save_failed`/`recovery_notice` are session state, not round
         // data: a fresh round must not clear a save-failure warning, and
-        // `recovery_notice` was already cleared above.
+        // `recovery_notice`/`deleting_row` were already cleared above.
         let Self {
             topic,
             pro_team,
@@ -206,6 +211,7 @@ impl RoundState {
             rfd,
             next_id,
             save_failed: _,
+            deleting_row: _,
             recovery_notice: _,
         } = fresh;
         self.topic.set(topic.get_untracked());

@@ -110,7 +110,10 @@ fn FlowRow(
     // Inline delete confirmation, anchored to the ✕ below: the native
     // `window.confirm` dialog appears wherever the browser puts it,
     // far from the row the judge is looking at.
-    let confirming_delete = RwSignal::new(false);
+    let target = (side, row_id);
+    let deleting_row = state.deleting_row;
+    let confirming_delete = Memo::new(move |_| deleting_row.get() == Some(target));
+    let close_confirm = move || deleting_row.update(|open| if *open == Some(target) { *open = None; });
     let keep_button = NodeRef::<leptos::html::Button>::new();
     Effect::new(move |_| {
         let keep = confirming_delete.get().then(|| keep_button.get()).flatten();
@@ -128,13 +131,13 @@ fn FlowRow(
         </div>
         <div class="row-del-wrap no-print" style=format!("grid-column: {}; grid-row: {};", SPEECH_COLS.len() + 2, row_index + 1)
                 on:keydown=move |ev| {
-                    if ev.key() == "Escape" { confirming_delete.set(false); }
+                    if ev.key() == "Escape" { close_confirm(); }
                 }>
                 <button class="row-del" class:row-del-armed=move || confirming_delete.get()
                     title="Delete this argument row" aria-label=format!("Delete {} argument {} row", side.label(), row_index)
                     aria-expanded=move || if confirming_delete.get() { "true" } else { "false" }
                     on:click=move |_| {
-                        confirming_delete.update(|armed| *armed = !*armed);
+                        deleting_row.update(|open| *open = if *open == Some(target) { None } else { Some(target) });
                     }>"−"</button>
                 {{let state = state.clone(); move || confirming_delete.get().then(|| {
                     let s = state.clone();
@@ -144,11 +147,11 @@ fn FlowRow(
                             <span class="row-del-q">"Delete this row?"</span>
                             <span class="row-del-actions">
                                 <button class="row-del-confirm" on:click={let s = s.clone(); move |_| {
-                                    confirming_delete.set(false);
+                                    close_confirm();
                                     s.remove_row(side, row_id);
                                 }}>"Delete"</button>
                                 <button class="row-del-keep" node_ref=keep_button
-                                    on:click=move |_| confirming_delete.set(false)>"Keep"</button>
+                                    on:click=move |_| close_confirm()>"Keep"</button>
                             </span>
                         </div>
                     }
