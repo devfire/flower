@@ -1,5 +1,6 @@
 //! Ballot helpers: dropped-argument hints for the decision section.
 
+use crate::markdown::render_markdown;
 use crate::model::{DroppedArgument, Side};
 use crate::openrouter::{self, ApiKey};
 use crate::shorthand::{InsertCtx, TextTarget};
@@ -122,7 +123,7 @@ fn ai_summary_output(
                 let s = state.clone();
                 view! {
                     <div class="ai-summary-box">
-                        <p class="ai-summary-body">{for_rfd.clone()}</p>
+                        <div class="ai-summary-body" inner_html=render_markdown(&for_rfd)></div>
                         <div class="ballot-actions">
                             <button class="btn btn-soft" on:click=move |_| {
                                 let text = for_copy.clone();

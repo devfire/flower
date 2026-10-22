@@ -7,6 +7,7 @@ mod confirm;
 mod flow_sheet;
 mod guide;
 mod hero;
+mod markdown;
 mod model;
 mod openrouter;
 mod persistence;
