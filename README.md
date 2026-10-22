@@ -10,7 +10,7 @@ lay judges who want to flow but don't really know how yet. Based on the NSDA
 - ⭐ **Extended / key-argument tags**, ⚖️ weighing prompts, speech + prep timers
 - 🐰 **Momo-chan suggestion bubbles** walk you through all 11 speeches/crossfires, one at a time
 - 🎯 **Focus mode** dims speeches that aren't happening right now
-- ✂️ Tap-to-insert **shorthand cheat sheet**, crossfire notes, guided decision ballot
+- ✂️ Tap-to-insert **shorthand cheat sheet**, notes, guided decision ballot
 - 🎀 **Resolution pre-filled** with the current NSDA Public Forum topic (extracted at build time into `topics.json`; a saved/typed topic is never overwritten — a newer NSDA wording is only offered, and the bundled fallback works offline)
 - 💾 Auto-saves in your browser (localStorage) — nothing leaves your device unless you request an AI summary
 - ✨ Optional **AI round summary**: "Connect to OpenRouter" (top of page) signs you in with your own OpenRouter account (OAuth PKCE); the key stays in `sessionStorage` for that tab only, and section 3 can then summarize the round on a free model under your account
@@ -50,7 +50,7 @@ No server or database: it's a fully static WASM site. The only API key is the op
 | `src/openrouter.rs` | OpenRouter OAuth PKCE connect/callback, session-only key, AI summary prompt + call |
 | `src/timer.rs` | Speech/prep timer bank (`TimerBank`, `PREP_SECS`, `fmt_time`) |
 | `src/progress.rs` | Round-progress persistence (guide step, timers, prep balances) |
-| `src/shorthand.rs` | Shorthand-chip insertion into flow cells / crossfire notes |
+| `src/shorthand.rs` | Shorthand-chip insertion into flow cells / notes |
 | `topics.json` | Last bundled NSDA PF resolution (fallback; refreshed at deploy time) |
 | `scripts/fetch_nsda_topic.py` | Build-time NSDA topics-page extraction (+ offline tests in `scripts/test_fetch_nsda_topic.py`) |
 | `style.css` | Kawaii pastel theme, responsive + print styles |

@@ -472,10 +472,10 @@ pub fn App() -> impl IntoView {
                 <FlowSheet state=st_flow.clone() side=Side::Con speaking_order=speaking_order current_col=None focus_mode=focus_mode insert_ctx=None on_speech_click=None />
             </section>
 
-            // ---------- Crossfire notes ----------
+            // ---------- Notes ----------
             <section class="card notes-card">
-                <h2>"Crossfire notes" <span class="card-sub">"optional — only concessions & admissions"</span></h2>
-                <textarea class="big-notes" id="notes-crossfire" rows="3" aria-label="Crossfire notes" placeholder="e.g. “Pro agreed recycling is only 9% — that helps Con C1…”"
+                <h2>"Notes" <span class="card-sub">"optional — only concessions & admissions"</span></h2>
+                <textarea class="big-notes" id="notes-crossfire" rows="3" aria-label="Notes" placeholder="e.g. “Pro agreed recycling is only 9% — that helps Con C1…”"
                     on:focus=move |_| insert_ctx.focus(TextTarget::CrossfireNotes)
                     prop:value=move || state.crossfire_notes.get()
                     on:input={let s = state.clone(); move |ev| { s.crossfire_notes.set(event_target_value(&ev)); save(&s); }}></textarea>

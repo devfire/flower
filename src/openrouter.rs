@@ -318,7 +318,7 @@ fn api_error(body: &str) -> Option<String> {
 
 /// The full flow as plain text for the model: every non-empty cell under
 /// its speech heading (in speaking order), marks spelled out, plus the
-/// crossfire notes, ballot, and the judge's own decision text.
+/// notes, ballot, and the judge's own decision text.
 #[must_use]
 pub fn summary_prompt(round: &RoundData) -> String {
     let mut prompt = String::new();
@@ -345,7 +345,7 @@ pub fn summary_prompt(round: &RoundData) -> String {
         }
     }
     if !round.crossfire_notes.trim().is_empty() {
-        let _ = writeln!(prompt, "\nCrossfire notes: {}", round.crossfire_notes.trim());
+        let _ = writeln!(prompt, "\nNotes: {}", round.crossfire_notes.trim());
     }
     let _ = writeln!(prompt, "\n{}", round.decision_text());
     prompt
@@ -426,6 +426,7 @@ mod tests {
     fn summary_prompt_lists_flow_in_speaking_order_with_marks() {
         let mut round = RoundData::sample();
         round.winner = Some(Side::Pro);
+        round.crossfire_notes = "Con conceded only 9% is recycled".to_owned();
         let prompt = summary_prompt(&round);
         assert!(prompt.contains("Resolved: The United States should ban single-use plastics."));
         assert!(prompt.contains("Pro sheet"));
@@ -433,6 +434,8 @@ mod tests {
         assert!(prompt.contains("Pro Constructive: Plastic → oceans"));
         assert!(prompt.contains("[➜ extended]"));
         assert!(prompt.contains("Winner: Pro"));
+        assert!(prompt.contains("Notes: Con conceded only 9% is recycled"));
+        assert!(!prompt.contains("Crossfire notes"));
         // Sparse flow: empty default round yields no Argument lines.
         assert!(!summary_prompt(&RoundData::default()).contains("Argument:"));
     }

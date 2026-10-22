@@ -1,7 +1,7 @@
 //! Shorthand-chip insertion (issue #8).
 //!
 //! Chips used to append to whichever flow cell was focused last — even
-//! while the judge was writing in Crossfire notes, the RFD, or a title —
+//! while the judge was writing in Notes, the RFD, or a title —
 //! and silently did nothing when no cell had ever been focused. Now every
 //! text box registers itself as the insert target on focus, insertion
 //! happens at the caret (replacing any selection), keyboard focus is
@@ -204,7 +204,7 @@ fn restore_focus(id: &str, text: &str, caret_byte: usize) {
 pub fn insert_shorthand(state: &RoundState, ctx: InsertCtx, sym: &str) {
     let Some(target) = ctx.target.get_untracked() else {
         ctx.hint.set(Some(
-            "\u{1f446} Tap a box you're writing in first \u{2014} a flow box, a contention title, Crossfire notes, or your reason \u{2014} then tap a symbol and it'll land where your cursor is."
+            "\u{1f446} Tap a box you're writing in first \u{2014} a flow box, a contention title, Notes, or your reason \u{2014} then tap a symbol and it'll land where your cursor is."
                 .to_string(),
         ));
         return;

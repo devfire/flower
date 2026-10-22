@@ -112,7 +112,7 @@ pub const GUIDE: [GuideStep; 11] = [
         flow_col: None,
         bubble: "Pencils down, relax! ☕ Crossfire is questions — you don't have to flow it.",
         listen_for: "A clear concession (“yes, that's true”) or a debater unable to answer.",
-        do_it: "Only jot a note in the Crossfire Notes box below if something big is admitted.",
+        do_it: "Only jot a note in the Notes box below if something big is admitted.",
         watch_out: "Don't decide anything yet — crossfire alone doesn't win rounds, the flow does.",
     },
     GuideStep {
@@ -172,7 +172,7 @@ pub const GUIDE: [GuideStep; 11] = [
         flow_col: None,
         bubble: "Everyone's in! Last questions — almost there, you're doing great. ✨",
         listen_for: "“Why should the judge vote for you?” — they'll name their voting issues.",
-        do_it: "Write those 1–2 named reasons in Crossfire Notes. Compare them with your ⭐ rows.",
+        do_it: "Write those 1–2 named reasons in Notes. Compare them with your ⭐ rows.",
         watch_out: "Grand crossfire claims still need to exist on the flow to count.",
     },
     GuideStep {
